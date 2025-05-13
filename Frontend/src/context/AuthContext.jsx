@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import axios from 'axios';
+import { login, register, logout, verifyToken } from '../api/auth';
 
 export const AuthContext = createContext();
 
@@ -8,235 +8,85 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Initialisation - Vérifier si un token existe déjà
+
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        // Vérifier si le token n'est pas expiré
-        const decodedToken = jwtDecode(token);
-        const currentTime = Date.now() / 1000;
-        
-        if (decodedToken.exp > currentTime) {
-          // Configurer axios avec le token
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // Vérifier si le token est expiré
+          const decodedToken = jwtDecode(token);
+          const currentTime = Date.now() / 1000;
           
-          // Récupérer les infos utilisateur
-          fetchUserData();
-        } else {
-          // Token expiré
-          logout();
+          if (decodedToken.exp < currentTime) {
+            // Token expiré
+            localStorage.removeItem('token');
+            setCurrentUser(null);
+          } else {
+            // Vérifier le token avec le backend
+            const response = await verifyToken();
+            setCurrentUser(response.data.user);
+          }
+        } catch (err) {
+          console.error('Erreur lors de la vérification du token:', err);
+          localStorage.removeItem('token');
+          setCurrentUser(null);
         }
-      } catch (err) {
-        console.error("Token invalide", err);
-        logout();
       }
-    } else {
       setLoading(false);
-    }
+    };
+
+    initAuth();
   }, []);
 
-  // Récupérer les données utilisateur
-  const fetchUserData = async () => {
+  const loginUser = async (credentials) => {
+    setError(null);
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/profile`);
-      setCurrentUser(response.data);
-      setLoading(false);
-    } catch (err) {
-      console.error("Erreur lors de la récupération des données utilisateur", err);
-      logout();
-    }
-  };
-
-  // Connexion
-  const login = async (email, password) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/login`, {
-        email,
-        password
-      });
-      
-      const { token, user } = response.data;
-      
-      // Sauvegarder le token
-      localStorage.setItem('token', token);
-      
-      // Configurer axios avec le token
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      setCurrentUser(user);
-      return user;
-    } catch (err) {
-      console.error("Erreur de connexion", err);
-      setError(err.response?.data?.message || "Erreur de connexion");
-      throw err;
-    }
-  };
-
-  // Inscription
-  const register = async (userData) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/register`, userData);
-      return response.data;
-    } catch (err) {
-      console.error("Erreur d'inscription", err);
-      setError(err.response?.data?.message || "Erreur d'inscription");
-      throw err;
-    }
-  };
-
-  // Confirmation de compte
-  const confirmAccount = async (token) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/confirm`, { token });
-      return response.data;
-    } catch (err) {
-      console.error("Erreur de confirmation", err);
-      setError(err.response?.data?.message || "Erreur de confirmation");
-      throw err;
-    }
-  };
-
-  // Demande de réinitialisation de mot de passe
-  const forgotPassword = async (email) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/forgot-password`, { email });
-      return response.data;
-    } catch (err) {
-      console.error("Erreur de demande de réinitialisation", err);
-      setError(err.response?.data?.message || "Erreur de demande");
-      throw err;
-    }
-  };
-
-  // Réinitialisation de mot de passe
-  const resetPassword = async (token, password) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/reset-password`, { 
-        token, 
-        password 
-      });
-      return response.data;
-    } catch (err) {
-      console.error("Erreur de réinitialisation", err);
-      setError(err.response?.data?.message || "Erreur de réinitialisation");
-      throw err;
-    }
-  };
-
-  // Mettre à jour le profil
-  const updateProfile = async (userData) => {
-    try {
-      setError(null);
-      const response = await axios.put(`${process.env.REACT_APP_API_URL}/api/users/profile`, userData);
+      const response = await login(credentials);
+      localStorage.setItem('token', response.data.token);
       setCurrentUser(response.data.user);
       return response.data;
     } catch (err) {
-      console.error("Erreur de mise à jour", err);
-      setError(err.response?.data?.message || "Erreur de mise à jour");
+      setError(err.response?.data?.message || 'Erreur de connexion');
       throw err;
     }
   };
 
-  // Demande de changement d'email
-  const requestEmailChange = async (newEmail) => {
+  const registerUser = async (userData) => {
+    setError(null);
     try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/users/request-email-change`, { 
-        newEmail 
-      });
+      const response = await register(userData);
       return response.data;
     } catch (err) {
-      console.error("Erreur de demande de changement d'email", err);
-      setError(err.response?.data?.message || "Erreur de demande");
+      setError(err.response?.data?.message || 'Erreur lors de l\'inscription');
       throw err;
     }
   };
 
-  // Confirmer le changement d'email
-  const confirmEmailChange = async (token) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/users/confirm-email-change`, { 
-        token 
-      });
-      setCurrentUser(response.data.user);
-      return response.data;
-    } catch (err) {
-      console.error("Erreur de confirmation d'email", err);
-      setError(err.response?.data?.message || "Erreur de confirmation");
-      throw err;
-    }
-  };
-
-  // Demande de changement de téléphone
-  const requestPhoneChange = async (newPhone) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/users/request-phone-change`, { 
-        newPhone 
-      });
-      return response.data;
-    } catch (err) {
-      console.error("Erreur de demande de changement de téléphone", err);
-      setError(err.response?.data?.message || "Erreur de demande");
-      throw err;
-    }
-  };
-
-  // Confirmer le changement de téléphone
-  const confirmPhoneChange = async (code) => {
-    try {
-      setError(null);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/users/confirm-phone-change`, { 
-        code 
-      });
-      setCurrentUser(response.data.user);
-      return response.data;
-    } catch (err) {
-      console.error("Erreur de confirmation de téléphone", err);
-      setError(err.response?.data?.message || "Erreur de confirmation");
-      throw err;
-    }
-  };
-
-  // Déconnexion
-  const logout = () => {
+  const logoutUser = () => {
     localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
     setCurrentUser(null);
-    setLoading(false);
+    logout();
   };
 
-  // Valeurs à exposer dans le contexte
-  const contextValue = {
+  const updateUserData = (userData) => {
+    setCurrentUser(userData);
+  };
+
+  const value = {
     currentUser,
     loading,
     error,
-    login,
-    register,
-    confirmAccount,
-    forgotPassword,
-    resetPassword,
-    updateProfile,
-    requestEmailChange,
-    confirmEmailChange,
-    requestPhoneChange,
-    confirmPhoneChange,
-    logout
+    loginUser,
+    registerUser,
+    logoutUser,
+    updateUserData,
+    setError
   };
 
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
-
-export default AuthContext;
