@@ -1,34 +1,120 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react'
+import { Routes, Route, useLocation } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
+
+// Layouts
+import MainLayout from './layouts/MainLayout'
+import AuthLayout from './layouts/AuthLayout'
+import DashboardLayout from './layouts/DashboardLayout'
+
+// Pages
+import Home from './pages/Home'
+import Login from './pages/auth/Login'
+import Register from './pages/auth/Register'
+import ForgotPassword from './pages/auth/ForgotPassword'
+import ResetPassword from './pages/auth/ResetPassword'
+import Profile from './pages/profile/Profile'
+import NotFound from './pages/NotFound'
+
+// Dashboard Pages
+import UserDashboard from './pages/dashboard/UserDashboard'
+import AdminDashboard from './pages/dashboard/AdminDashboard'
+
+// Components
+import ProtectedRoute from './components/ProtectedRoute'
+import LoadingScreen from './components/LoadingScreen'
+
+// Store
+import { useAuthStore } from './store/authStore'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const location = useLocation()
+  const { checkAuth, isLoading } = useAuthStore()
+  const [initialCheckDone, setInitialCheckDone] = useState(false)
+
+  // Vérifier l'authentification au chargement de l'application
+  useEffect(() => {
+    const initialCheck = async () => {
+      await checkAuth()
+      setInitialCheckDone(true)
+    }
+    initialCheck()
+  }, [checkAuth])
+
+  // Afficher un écran de chargement pendant la vérification d'authentification
+  if (isLoading && !initialCheckDone) {
+    return <LoadingScreen />
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        {/* Routes publiques avec MainLayout */}
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/404" element={<NotFound />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+
+        {/* Routes d'authentification avec AuthLayout */}
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+        </Route>
+
+        {/* Routes protégées utilisateur */}
+        <Route element={<DashboardLayout />}>
+          <Route 
+            path="/user/dashboard" 
+            element={
+              <ProtectedRoute>
+                <UserDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } 
+          />
+        </Route>
+
+        {/* Routes protégées administrateur */}
+        <Route element={<DashboardLayout />}>
+          <Route 
+            path="/admin/dashboard" 
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/admin/users" 
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminDashboard />
+                {/* Remplacer par votre composant de gestion des utilisateurs une fois créé */}
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/admin/settings" 
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminDashboard />
+                {/* Remplacer par votre composant de paramètres système une fois créé */}
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+      </Routes>
+    </AnimatePresence>
   )
 }
 
