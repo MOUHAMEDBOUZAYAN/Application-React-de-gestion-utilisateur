@@ -9,6 +9,7 @@ const Login = () => {
     password: ''
   })
   const [showPassword, setShowPassword] = useState(false)
+  const [emailFromRegister, setEmailFromRegister] = useState(false) // Pour indiquer si l'email vient de la page d'inscription
   
   const { login, isLoading, error, clearErrors, isAuthenticated, user } = useAuthStore()
   const navigate = useNavigate()
@@ -16,6 +17,17 @@ const Login = () => {
   
   // Récupérer l'URL de redirection s'il y en a une
   const from = location.state?.from?.pathname || '/'
+  
+  // Utiliser l'email s'il est passé dans l'état de la navigation
+  useEffect(() => {
+    if (location.state?.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: location.state.email
+      }));
+      setEmailFromRegister(true);
+    }
+  }, [location.state]);
   
   // Rediriger si déjà authentifié
   useEffect(() => {
@@ -87,6 +99,26 @@ const Login = () => {
         Connexion
       </motion.h2>
       
+      {/* Message pour l'utilisateur redirigé depuis la page d'inscription */}
+      {emailFromRegister && (
+        <motion.div 
+          className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6 relative"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-start">
+            <svg className="h-5 w-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <strong className="font-medium">Compte existant!</strong>
+              <span className="block sm:inline ml-1">Un compte avec cette adresse email existe déjà. Veuillez vous connecter.</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+      
       {error && (
         <motion.div 
           className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6 relative"
@@ -133,6 +165,7 @@ const Login = () => {
               className="w-full py-3 pl-10 pr-4 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors"
               placeholder="exemple@domaine.com"
               disabled={isLoading}
+              autoFocus={emailFromRegister} // Mettre le focus sur le champ de mot de passe si l'email est pré-rempli
             />
           </div>
         </div>
@@ -165,6 +198,7 @@ const Login = () => {
               className="w-full py-3 pl-10 pr-10 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors"
               placeholder="••••••••"
               disabled={isLoading}
+              autoFocus={!emailFromRegister} // Mettre le focus sur le champ de mot de passe si l'email est pré-rempli
             />
             <button
               type="button"

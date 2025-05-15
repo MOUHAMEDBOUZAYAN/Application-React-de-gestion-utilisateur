@@ -1,4 +1,4 @@
-// src/store/authStore.jsx
+// src/store/authStore.jsx - Version corrigée pour le problème de mot de passe
 import { create } from 'zustand';
 import toast from 'react-hot-toast';
 import axios from '../config/axiosConfig'; // Import depuis le fichier de configuration
@@ -53,6 +53,20 @@ export const useAuthStore = create((set, get) => ({
     return !!(user && user.role === 'admin');
   },
 
+  // Vérification de disponibilité d'email
+  checkEmailAvailability: async (email) => {
+    try {
+      set({ isLoading: true });
+      const response = await axios.post('/api/auth/check-email', { email });
+      set({ isLoading: false });
+      return response.data.available; // true si l'email est disponible
+    } catch (error) {
+      console.error('Erreur lors de la vérification d\'email:', error);
+      set({ isLoading: false });
+      return false; // Supposons que l'email n'est pas disponible en cas d'erreur
+    }
+  },
+
   // Inscription
   register: async (userData) => {
     set({ isLoading: true, error: null });
@@ -82,7 +96,13 @@ export const useAuthStore = create((set, get) => ({
       return true;
     } catch (error) {
       console.error('Erreur lors de l\'inscription:', error);
-      const errorMessage = error.response?.data?.error || 'Erreur lors de l\'inscription. Veuillez réessayer.';
+      let errorMessage = error.response?.data?.error || 'Erreur lors de l\'inscription. Veuillez réessayer.';
+      
+      // Si c'est une erreur d'email déjà utilisé, on la met en forme spéciale
+      if (errorMessage.includes('email') && errorMessage.includes('utilisé')) {
+        errorMessage = 'Cet email est déjà utilisé';
+      }
+      
       set({ isLoading: false, error: errorMessage });
       toast.error(errorMessage);
       return false;
@@ -203,13 +223,36 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Mise à jour du mot de passe
+  // Mise à jour du mot de passe - CORRECTION
   updatePassword: async (passwordData) => {
     set({ isLoading: true, error: null });
     try {
-      await axios.put('/api/auth/updatepassword', passwordData);
-      set({ isLoading: false, error: null });
+      // Vérifier que tous les champs requis sont présents
+      if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.passwordConfirm) {
+        set({ 
+          isLoading: false, 
+          error: 'Tous les champs sont requis' 
+        });
+        return false;
+      }
       
+      // Vérifier que les mots de passe correspondent
+      if (passwordData.newPassword !== passwordData.passwordConfirm) {
+        set({ 
+          isLoading: false, 
+          error: 'La confirmation du mot de passe est requise, Les mots de passe ne correspondent pas' 
+        });
+        return false;
+      }
+      
+      // Appel API
+      await axios.put('/api/auth/updatepassword', {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+        passwordConfirm: passwordData.passwordConfirm
+      });
+      
+      set({ isLoading: false, error: null });
       toast.success('Mot de passe mis à jour avec succès!');
       return true;
     } catch (error) {

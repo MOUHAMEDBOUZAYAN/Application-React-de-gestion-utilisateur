@@ -72,6 +72,7 @@ const DashboardLayout = () => {
           isAdmin={isAdmin} 
           navigateToDashboard={navigateToDashboard} 
           handleLogout={handleLogout} 
+          navigate={navigate}
         />
       </motion.div>
 
@@ -103,6 +104,7 @@ const DashboardLayout = () => {
               isAdmin={isAdmin} 
               navigateToDashboard={navigateToDashboard} 
               handleLogout={handleLogout}
+              navigate={navigate}
               onLinkClick={() => setIsMobileSidebarOpen(false)}
             />
           </motion.div>
@@ -156,7 +158,7 @@ const DashboardLayout = () => {
 };
 
 // Composant séparé pour le contenu de la sidebar
-const SidebarContent = ({ user, isAdmin, navigateToDashboard, handleLogout, onLinkClick = () => {} }) => {
+const SidebarContent = ({ user, isAdmin, navigateToDashboard, handleLogout, navigate, onLinkClick = () => {} }) => {
   return (
     <>
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">

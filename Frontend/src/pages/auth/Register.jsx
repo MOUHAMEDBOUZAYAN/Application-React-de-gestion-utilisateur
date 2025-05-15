@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { motion } from 'framer-motion'
+import toast from 'react-hot-toast'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -14,6 +15,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState(0)
   const [passwordsMatch, setPasswordsMatch] = useState(true)
+  const [emailError, setEmailError] = useState('') // Nouvel état pour les erreurs d'email
   
   const { register, isLoading, error, clearErrors, isAuthenticated, user } = useAuthStore()
   const navigate = useNavigate()
@@ -33,7 +35,15 @@ const Register = () => {
   // Nettoyer les erreurs lors du montage du composant
   useEffect(() => {
     clearErrors()
+    setEmailError('') // Réinitialiser l'erreur d'email
   }, [clearErrors])
+  
+  // Surveiller les erreurs venant du store
+  useEffect(() => {
+    if (error && error.includes("email est déjà utilisé")) {
+      setEmailError("Cet email est déjà utilisé. Veuillez vous connecter ou utiliser une autre adresse email.")
+    }
+  }, [error])
   
   // Vérifier la force du mot de passe
   useEffect(() => {
@@ -56,6 +66,12 @@ const Register = () => {
   
   const handleChange = (e) => {
     const { name, value } = e.target
+    
+    // Effacer l'erreur d'email lorsque l'utilisateur modifie l'email
+    if (name === 'email' && emailError) {
+      setEmailError('')
+    }
+    
     setFormData({ ...formData, [name]: value })
   }
   
@@ -68,21 +84,39 @@ const Register = () => {
       return
     }
     
-    // Créer un objet de données à envoyer à l'API - inclure passwordConfirm
+    // Réinitialiser les erreurs d'email
+    setEmailError('')
+    
+    // Créer un objet de données à envoyer à l'API
     const registerData = {
       name: formData.name,
       email: formData.email,
       password: formData.password,
-      passwordConfirm: formData.passwordConfirm, // Ajouter cette ligne
+      passwordConfirm: formData.passwordConfirm,
       role: formData.role 
     }
     
-    console.log('Envoi des données:', { ...registerData, password: '[MASQUÉ]', passwordConfirm: '[MASQUÉ]' })
-    
-    const success = await register(registerData)
-    if (success) {
-      // La redirection se fera automatiquement via l'effet useEffect
+    try {
+      console.log('Envoi des données:', { ...registerData, password: '[MASQUÉ]', passwordConfirm: '[MASQUÉ]' })
+      
+      const success = await register(registerData)
+      if (success) {
+        // La redirection se fera automatiquement via l'effet useEffect
+      }
+    } catch (err) {
+      // Gérer l'erreur ici si nécessaire
+      console.error("Erreur lors de l'inscription:", err)
+      
+      // Vous pouvez vérifier si l'erreur est liée à l'email
+      if (err.message && err.message.includes("email")) {
+        setEmailError("Cet email est déjà utilisé. Veuillez vous connecter ou utiliser une autre adresse email.")
+      }
     }
+  }
+  
+  // Fonction pour se connecter directement (si l'email existe déjà)
+  const handleLoginRedirect = () => {
+    navigate('/login', { state: { email: formData.email } })
   }
   
   return (
@@ -96,7 +130,7 @@ const Register = () => {
         Créer un compte
       </motion.h2>
       
-      {error && (
+      {error && !error.includes("email est déjà utilisé") && (
         <motion.div 
           className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative"
           initial={{ opacity: 0, scale: 0.9 }}
@@ -105,6 +139,31 @@ const Register = () => {
         >
           <strong className="font-bold">Erreur!</strong>
           <span className="block sm:inline"> {error}</span>
+        </motion.div>
+      )}
+      
+      {emailError && (
+        <motion.div 
+          className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-4 relative"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-start">
+            <svg className="h-5 w-5 text-yellow-600 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <strong className="font-medium">Attention!</strong>
+              <p className="mt-1">{emailError}</p>
+              <button 
+                onClick={handleLoginRedirect}
+                className="mt-2 text-primary-600 hover:text-primary-800 font-medium underline"
+              >
+                Se connecter avec cet email
+              </button>
+            </div>
+          </div>
         </motion.div>
       )}
       
@@ -149,10 +208,15 @@ const Register = () => {
             value={formData.email}
             onChange={handleChange}
             required
-            className="input"
+            className={`input ${emailError ? 'border-yellow-500 focus:ring-yellow-500 focus:border-yellow-500' : ''}`}
             placeholder="exemple@domaine.com"
             disabled={isLoading}
           />
+          {emailError && (
+            <p className="text-yellow-600 text-sm mt-1">
+              Cet email est déjà associé à un compte.
+            </p>
+          )}
         </div>
         
         {/* Choix du rôle */}
@@ -327,7 +391,8 @@ const Register = () => {
             !passwordsMatch ||
             passwordStrength < 2 ||
             !formData.password ||
-            !formData.passwordConfirm
+            !formData.passwordConfirm ||
+            emailError // Désactiver le bouton si l'email est déjà utilisé
           }
         >
           {isLoading ? (

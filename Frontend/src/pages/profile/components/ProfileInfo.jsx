@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../../../store/authStore'
+import toast from 'react-hot-toast' // Import de toast
+import { useNavigate } from 'react-router-dom' // Importez useNavigate
 
-const ProfileInfo = ({ user }) => {
+const ProfileInfo = ({ user, onChangeTab }) => {
   const [formData, setFormData] = useState({
     name: user.name || '',
     email: user.email || ''
   })
   const [isEditing, setIsEditing] = useState(false)
+  const navigate = useNavigate() // Utilisez le hook useNavigate
   
   const { updateProfile, isLoading } = useAuthStore()
   
@@ -271,7 +274,15 @@ const ProfileInfo = ({ user }) => {
                         <button
                           type="button"
                           className="px-3 py-1.5 bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-300 rounded-md text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                          onClick={() => document.getElementById('password-tab').click()}
+                          onClick={() => {
+                            // Utiliser la fonction onChangeTab pour changer d'onglet au lieu de rediriger vers une URL
+                            if (typeof onChangeTab === 'function') {
+                              onChangeTab('password');
+                            } else {
+                              // Fallback si la prop onChangeTab n'est pas disponible
+                              toast.success('Changement vers l\'onglet mot de passe');
+                            }
+                          }}
                         >
                           Changer de mot de passe
                         </button>
