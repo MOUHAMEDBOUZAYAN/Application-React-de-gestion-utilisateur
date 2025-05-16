@@ -8,6 +8,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const mongoose = require('mongoose');
+const path = require('path');
 
 // Charger les variables d'environnement
 dotenv.config();
@@ -17,6 +18,7 @@ const connectDB = require('./config/database');
 const errorHandler = require('./middlewares/errorHandler');
 const customSecurity = require('./middlewares/customSecurity');
 const checkEnv = require('./config/env');
+const corsOptions = require('./config/cors');
 
 // Vérifier les variables d'environnement
 if (typeof checkEnv === 'function') {
@@ -35,17 +37,10 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Configuration CORS - Cette partie est CRITIQUE
-app.use(cors({
-  origin: '*', // Permettre toutes les origines en développement
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
-  credentials: true,
-  exposedHeaders: ['X-Total-Count', 'Content-Length', 'Content-Type'],
-  maxAge: 86400 // 24 heures en secondes
-}));
+app.use(cors(corsOptions));
 
 // Répondre explicitement aux requêtes OPTIONS préliminaires
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 // Parser du body
 app.use(express.json({ limit: '10kb' }));
@@ -96,21 +91,42 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'Bienvenue sur l\'API d\'authentification',
     status: 'success',
-    time: new Date().toISOString() 
+    time: new Date().toISOString(),
+    version: '2.0.0'
   });
 });
 
 // Routes API
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/logs', require('./routes/logRoutes'));
 
-// Route de gestion des erreurs 404 (route non trouvée)
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: `Route non trouvée: ${req.originalUrl}`
+// Servir les pages frontend React en production
+if (process.env.NODE_ENV === 'production') {
+  // Dossier statique
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+  // Route catch-all pour SPA
+  app.get('*', (req, res) => {
+    // Exclure les routes d'API
+    if (!req.originalUrl.startsWith('/api/')) {
+      res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
+    } else {
+      res.status(404).json({
+        success: false,
+        error: `Route API non trouvée: ${req.originalUrl}`
+      });
+    }
   });
-});
+} else {
+  // Route de gestion des erreurs 404 (route non trouvée) en développement
+  app.use('*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      error: `Route non trouvée: ${req.originalUrl}`
+    });
+  });
+}
 
 // Middleware de gestion des erreurs - doit être placé après les routes
 app.use(errorHandler);
