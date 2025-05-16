@@ -1,10 +1,31 @@
 // models/User.js
-// Modèle utilisateur
+// Modèle utilisateur mis à jour avec vérifications et historique
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+
+// Sous-schéma pour historique de modifications
+const changeHistorySchema = new mongoose.Schema({
+    fieldName: {
+        type: String,
+        required: true,
+        enum: ['email', 'name', 'phone']
+    },
+    oldValue: {
+        type: String,
+        required: true
+    },
+    newValue: {
+        type: String, 
+        required: true
+    },
+    changedAt: {
+        type: Date,
+        default: Date.now
+    }
+});
 
 const UserSchema = new mongoose.Schema({
     name: {
@@ -23,6 +44,14 @@ const UserSchema = new mongoose.Schema({
         ],
         lowercase: true
     },
+    phone: {
+        type: String,
+        match: [
+            /^\+?[0-9]{10,15}$/,
+            'Veuillez fournir un numéro de téléphone valide'
+        ],
+        sparse: true // Permet des valeurs null tout en maintenant l'unicité
+    },
     password: {
         type: String,
         required: [true, 'Veuillez fournir un mot de passe'],
@@ -34,6 +63,18 @@ const UserSchema = new mongoose.Schema({
         enum: ['user', 'admin'],
         default: 'user'
     },
+    isEmailVerified: {
+        type: Boolean,
+        default: false
+    },
+    isPhoneVerified: {
+        type: Boolean,
+        default: false
+    },
+    emailVerificationToken: String,
+    emailVerificationExpire: Date,
+    phoneVerificationCode: String,
+    phoneVerificationExpire: Date,
     resetPasswordToken: String,
     resetPasswordExpire: Date,
     lastLogin: Date,
@@ -48,7 +89,9 @@ const UserSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
-    }
+    },
+    // Historique des modifications
+    changeHistory: [changeHistorySchema]
 });
 
 // Chiffrer le mot de passe avant l'enregistrement
@@ -97,6 +140,45 @@ UserSchema.methods.getResetPasswordToken = function () {
     this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
 
     return resetToken;
+};
+
+// Générer un token pour la vérification d'email
+UserSchema.methods.getEmailVerificationToken = function () {
+    // Générer un token
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+
+    // Hacher le token et le stocker dans le document
+    this.emailVerificationToken = crypto
+        .createHash('sha256')
+        .update(verificationToken)
+        .digest('hex');
+
+    // Définir la date d'expiration (24 heures)
+    this.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
+
+    return verificationToken;
+};
+
+// Générer un code de vérification pour le téléphone
+UserSchema.methods.getPhoneVerificationCode = function () {
+    // Générer un code à 6 chiffres
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Stocker le code et sa date d'expiration
+    this.phoneVerificationCode = verificationCode;
+    this.phoneVerificationExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    
+    return verificationCode;
+};
+
+// Méthode pour enregistrer l'historique des modifications
+UserSchema.methods.trackChange = function (fieldName, oldValue, newValue) {
+    this.changeHistory.push({
+        fieldName,
+        oldValue,
+        newValue,
+        changedAt: Date.now()
+    });
 };
 
 // Méthode pour incrémenter les tentatives de connexion

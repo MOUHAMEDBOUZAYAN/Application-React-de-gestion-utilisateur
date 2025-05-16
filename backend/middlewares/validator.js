@@ -4,7 +4,7 @@
 const { body, validationResult } = require('express-validator');
 const ErrorResponse = require('../utils/errorResponse');
 
-// Traiter les résultats de validation - Version corrigée
+// Traiter les résultats de validation
 const validationMiddleware = (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -36,11 +36,8 @@ const registerValidationRules = [
   body('password')
     .notEmpty().withMessage('Le mot de passe est requis')
     .isLength({ min: 6 }).withMessage('Le mot de passe doit comporter au moins 6 caractères')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/).withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre')
-];
-
-// Règles pour vérifier la confirmation du mot de passe séparément
-const passwordConfirmValidationRule = [
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/).withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre'),
+  
   body('passwordConfirm')
     .notEmpty().withMessage('La confirmation du mot de passe est requise')
     .custom((value, { req }) => {
@@ -48,17 +45,17 @@ const passwordConfirmValidationRule = [
         throw new Error('Les mots de passe ne correspondent pas');
       }
       return true;
-    })
-];
-
-// Règles complètes pour l'inscription
-const fullRegisterValidationRules = [
-  ...registerValidationRules,
-  ...passwordConfirmValidationRule,
+    }),
+  
   // Règle pour valider le rôle
   body('role')
     .optional()
-    .isIn(['user', 'admin']).withMessage('Le rôle doit être "user" ou "admin"')
+    .isIn(['user', 'admin']).withMessage('Le rôle doit être "user" ou "admin"'),
+  
+  // Règle pour valider le téléphone
+  body('phone')
+    .optional()
+    .matches(/^\+?[0-9]{10,15}$/).withMessage('Veuillez fournir un numéro de téléphone valide')
 ];
 
 // Règles de validation pour la connexion
@@ -102,7 +99,11 @@ const updateProfileValidationRules = [
     .optional()
     .trim()
     .isEmail().withMessage('Veuillez fournir un email valide')
-    .normalizeEmail({ gmail_remove_dots: false })
+    .normalizeEmail({ gmail_remove_dots: false }),
+  
+  body('phone')
+    .optional()
+    .matches(/^\+?[0-9]{10,15}$/).withMessage('Veuillez fournir un numéro de téléphone valide')
 ];
 
 // Règles de validation pour la mise à jour du mot de passe
@@ -131,11 +132,20 @@ const updatePasswordValidationRules = [
     })
 ];
 
+// Règles de validation pour la vérification du téléphone
+const phoneVerificationRules = [
+  body('verificationCode')
+    .notEmpty().withMessage('Le code de vérification est requis')
+    .isLength({ min: 6, max: 6 }).withMessage('Le code de vérification doit comporter 6 chiffres')
+    .isNumeric().withMessage('Le code de vérification doit être numérique')
+];
+
 module.exports = {
   validationMiddleware,
-  registerValidationRules: fullRegisterValidationRules,
+  registerValidationRules,
   loginValidationRules,
   resetPasswordValidationRules,
   updateProfileValidationRules,
-  updatePasswordValidationRules
+  updatePasswordValidationRules,
+  phoneVerificationRules
 };
