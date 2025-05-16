@@ -1,4 +1,4 @@
-// routes/userRoutes.js
+// routes/userRoutes.js (version entièrement corrigée)
 // Routes pour la gestion des utilisateurs
 
 const express = require('express');
@@ -8,9 +8,7 @@ const {
   getUser,
   createUser,
   updateUser,
-  deleteUser,
-  getUserHistory,
-  getUserStats
+  deleteUser
 } = require('../controllers/userController');
 const {
   protect,
@@ -21,15 +19,10 @@ const {
   updateProfileValidationRules,
   validationMiddleware
 } = require('../middlewares/validator');
-const userLogger = require('../middlewares/userLogger');
 
 // Protéger toutes les routes et limiter aux administrateurs
 router.use(protect);
 router.use(authorize('admin'));
-router.use(userLogger('admin_action')); // Logger toutes les actions admin
-
-// Statistiques utilisateurs
-router.get('/stats', getUserStats);
 
 // Routes CRUD pour les utilisateurs
 router.route('/')
@@ -40,8 +33,5 @@ router.route('/:id')
   .get(getUser)
   .put(updateProfileValidationRules, validationMiddleware, updateUser)
   .delete(deleteUser);
-
-// Historique des modifications utilisateur
-router.get('/:id/history', getUserHistory);
 
 module.exports = router;

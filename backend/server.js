@@ -1,4 +1,4 @@
-// server.js
+// server.js (version minimale fonctionnelle)
 // Point d'entrée principal de l'application
 
 const express = require('express');
@@ -8,7 +8,6 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const mongoose = require('mongoose');
-const path = require('path');
 
 // Charger les variables d'environnement
 dotenv.config();
@@ -18,7 +17,6 @@ const connectDB = require('./config/database');
 const errorHandler = require('./middlewares/errorHandler');
 const customSecurity = require('./middlewares/customSecurity');
 const checkEnv = require('./config/env');
-const corsOptions = require('./config/cors');
 
 // Vérifier les variables d'environnement
 if (typeof checkEnv === 'function') {
@@ -36,11 +34,11 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Configuration CORS - Cette partie est CRITIQUE
-app.use(cors(corsOptions));
-
-// Répondre explicitement aux requêtes OPTIONS préliminaires
-app.options('*', cors(corsOptions));
+// Configuration CORS simplifiée
+app.use(cors({
+  origin: '*',  // En développement, accepte toutes les origines
+  credentials: true
+}));
 
 // Parser du body
 app.use(express.json({ limit: '10kb' }));
@@ -72,67 +70,32 @@ if (useSession) {
 // Utiliser le middleware de sécurité personnalisé
 app.use(customSecurity);
 
-// Log complet des requêtes pour débogage en développement
-if (process.env.NODE_ENV === 'development') {
-  app.use((req, res, next) => {
-    console.log('\n--- NOUVELLE REQUÊTE ---');
-    console.log(`${req.method} ${req.originalUrl}`);
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
-    console.log('Params:', req.params);
-    console.log('Query:', req.query);
-    console.log('------------------------\n');
-    next();
-  });
-}
-
 // Route de base pour vérifier que l'API fonctionne
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Bienvenue sur l\'API d\'authentification',
     status: 'success',
-    time: new Date().toISOString(),
-    version: '2.0.0'
+    time: new Date().toISOString() 
   });
 });
 
 // Routes API
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/logs', require('./routes/logRoutes'));
 
-// Servir les pages frontend React en production
-if (process.env.NODE_ENV === 'production') {
-  // Dossier statique
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-  // Route catch-all pour SPA
-  app.get('*', (req, res) => {
-    // Exclure les routes d'API
-    if (!req.originalUrl.startsWith('/api/')) {
-      res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
-    } else {
-      res.status(404).json({
-        success: false,
-        error: `Route API non trouvée: ${req.originalUrl}`
-      });
-    }
+// Route de gestion des erreurs 404 (route non trouvée)
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `Route non trouvée: ${req.originalUrl}`
   });
-} else {
-  // Route de gestion des erreurs 404 (route non trouvée) en développement
-  app.use('*', (req, res) => {
-    res.status(404).json({
-      success: false,
-      error: `Route non trouvée: ${req.originalUrl}`
-    });
-  });
-}
+});
 
 // Middleware de gestion des erreurs - doit être placé après les routes
 app.use(errorHandler);
 
 // Port d'écoute
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 // Démarrer le serveur
 const server = app.listen(PORT, () => {
