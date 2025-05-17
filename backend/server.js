@@ -1,6 +1,4 @@
-// server.js - Configuration CORS mise à jour pour le frontend
-// server.js
-// Point d'entrée principal de l'application
+// server.js - Mise à jour avec les nouvelles routes et CORS configuré
 
 const express = require('express');
 const dotenv = require('dotenv');
@@ -36,12 +34,12 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Configuration CORS - Cette partie est CRITIQUE
+// Configuration CORS optimisée pour le frontend React
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:5173'], // ⚠️ Mettre à jour pour correspondre à votre frontend
+  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
-  credentials: true, // Important pour l'authentification
+  credentials: true, // Important pour permettre les cookies entre domaines différents
   exposedHeaders: ['X-Total-Count', 'Content-Length', 'Content-Type'],
   maxAge: 86400 // 24 heures en secondes
 };
@@ -108,6 +106,7 @@ app.get('/', (req, res) => {
 // Routes API
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 // Route de gestion des erreurs 404 (route non trouvée)
 app.use('*', (req, res) => {

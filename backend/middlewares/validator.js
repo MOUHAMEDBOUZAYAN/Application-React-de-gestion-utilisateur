@@ -1,5 +1,4 @@
-// middlewares/validator.js
-// Middleware de validation des entrées
+// middlewares/validator.js - Mise à jour avec validations plus strictes
 
 const { body, validationResult } = require('express-validator');
 const ErrorResponse = require('../utils/errorResponse');
@@ -21,23 +20,29 @@ const validationMiddleware = (req, res, next) => {
 
 // Règles de validation pour l'inscription
 const registerValidationRules = [
+  // Nom
   body('name')
     .trim()
     .notEmpty().withMessage('Le nom est requis')
     .isLength({ min: 2, max: 50 }).withMessage('Le nom doit comporter entre 2 et 50 caractères')
+    .matches(/^[a-zA-ZÀ-ÿ\s'-]+$/).withMessage('Le nom ne doit contenir que des lettres, espaces, apostrophes et tirets')
     .escape(),
   
+  // Email
   body('email')
     .trim()
     .notEmpty().withMessage('L\'email est requis')
     .isEmail().withMessage('Veuillez fournir un email valide')
-    .normalizeEmail({ gmail_remove_dots: false }),  // Configuration plus sûre
+    .normalizeEmail({ gmail_remove_dots: false }),
   
+  // Mot de passe
   body('password')
     .notEmpty().withMessage('Le mot de passe est requis')
-    .isLength({ min: 6 }).withMessage('Le mot de passe doit comporter au moins 6 caractères')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/).withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre'),
+    .isLength({ min: 8 }).withMessage('Le mot de passe doit comporter au moins 8 caractères')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial'),
   
+  // Confirmation de mot de passe
   body('passwordConfirm')
     .notEmpty().withMessage('La confirmation du mot de passe est requise')
     .custom((value, { req }) => {
@@ -47,15 +52,15 @@ const registerValidationRules = [
       return true;
     }),
   
-  // Règle pour valider le rôle
+  // Rôle (optionnel)
   body('role')
     .optional()
     .isIn(['user', 'admin']).withMessage('Le rôle doit être "user" ou "admin"'),
   
-  // Règle pour valider le téléphone
+  // Téléphone (optionnel)
   body('phone')
     .optional()
-    .matches(/^\+?[0-9]{10,15}$/).withMessage('Veuillez fournir un numéro de téléphone valide')
+    .matches(/^\+?[0-9]{10,15}$/).withMessage('Veuillez fournir un numéro de téléphone valide (10-15 chiffres)')
 ];
 
 // Règles de validation pour la connexion
@@ -74,8 +79,9 @@ const loginValidationRules = [
 const resetPasswordValidationRules = [
   body('password')
     .notEmpty().withMessage('Le mot de passe est requis')
-    .isLength({ min: 6 }).withMessage('Le mot de passe doit comporter au moins 6 caractères')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/).withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre'),
+    .isLength({ min: 8 }).withMessage('Le mot de passe doit comporter au moins 8 caractères')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial'),
   
   body('passwordConfirm')
     .notEmpty().withMessage('La confirmation du mot de passe est requise')
@@ -89,21 +95,25 @@ const resetPasswordValidationRules = [
 
 // Règles de validation pour la mise à jour du profil
 const updateProfileValidationRules = [
+  // Nom (optionnel)
   body('name')
     .optional()
     .trim()
     .isLength({ min: 2, max: 50 }).withMessage('Le nom doit comporter entre 2 et 50 caractères')
+    .matches(/^[a-zA-ZÀ-ÿ\s'-]+$/).withMessage('Le nom ne doit contenir que des lettres, espaces, apostrophes et tirets')
     .escape(),
   
+  // Email (optionnel)
   body('email')
     .optional()
     .trim()
     .isEmail().withMessage('Veuillez fournir un email valide')
     .normalizeEmail({ gmail_remove_dots: false }),
   
+  // Téléphone (optionnel)
   body('phone')
     .optional()
-    .matches(/^\+?[0-9]{10,15}$/).withMessage('Veuillez fournir un numéro de téléphone valide')
+    .matches(/^\+?[0-9]{10,15}$/).withMessage('Veuillez fournir un numéro de téléphone valide (10-15 chiffres)')
 ];
 
 // Règles de validation pour la mise à jour du mot de passe
@@ -113,8 +123,9 @@ const updatePasswordValidationRules = [
   
   body('newPassword')
     .notEmpty().withMessage('Le nouveau mot de passe est requis')
-    .isLength({ min: 6 }).withMessage('Le mot de passe doit comporter au moins 6 caractères')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/).withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre')
+    .isLength({ min: 8 }).withMessage('Le mot de passe doit comporter au moins 8 caractères')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial')
     .custom((value, { req }) => {
       if (value === req.body.currentPassword) {
         throw new Error('Le nouveau mot de passe doit être différent de l\'actuel');
