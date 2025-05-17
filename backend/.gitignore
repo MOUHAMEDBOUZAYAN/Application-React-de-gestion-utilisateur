@@ -1,0 +1,2 @@
+# Créer un fichier .gitignore à la racine du projet
+echo "backend/.env" > .gitignore
