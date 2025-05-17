@@ -1,4 +1,5 @@
-// server.js (version minimale fonctionnelle)
+// server.js - Configuration CORS mise à jour pour le frontend
+// server.js
 // Point d'entrée principal de l'application
 
 const express = require('express');
@@ -8,6 +9,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const mongoose = require('mongoose');
+const path = require('path');
 
 // Charger les variables d'environnement
 dotenv.config();
@@ -34,11 +36,20 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Configuration CORS simplifiée
-app.use(cors({
-  origin: '*',  // En développement, accepte toutes les origines
-  credentials: true
-}));
+// Configuration CORS - Cette partie est CRITIQUE
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:5173'], // ⚠️ Mettre à jour pour correspondre à votre frontend
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+  credentials: true, // Important pour l'authentification
+  exposedHeaders: ['X-Total-Count', 'Content-Length', 'Content-Type'],
+  maxAge: 86400 // 24 heures en secondes
+};
+
+app.use(cors(corsOptions));
+
+// Répondre explicitement aux requêtes OPTIONS préliminaires
+app.options('*', cors(corsOptions));
 
 // Parser du body
 app.use(express.json({ limit: '10kb' }));
@@ -70,12 +81,27 @@ if (useSession) {
 // Utiliser le middleware de sécurité personnalisé
 app.use(customSecurity);
 
+// Log complet des requêtes pour débogage en développement
+if (process.env.NODE_ENV === 'development') {
+  app.use((req, res, next) => {
+    console.log('\n--- NOUVELLE REQUÊTE ---');
+    console.log(`${req.method} ${req.originalUrl}`);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('Params:', req.params);
+    console.log('Query:', req.query);
+    console.log('------------------------\n');
+    next();
+  });
+}
+
 // Route de base pour vérifier que l'API fonctionne
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Bienvenue sur l\'API d\'authentification',
     status: 'success',
-    time: new Date().toISOString() 
+    time: new Date().toISOString(),
+    version: '2.0.0'
   });
 });
 

@@ -1,24 +1,24 @@
 // models/User.js
-// Modèle utilisateur mis à jour avec vérifications et historique
+// Modèle utilisateur amélioré avec vérification et historique
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-// Sous-schéma pour historique de modifications
+// Sous-schéma pour l'historique des modifications
 const changeHistorySchema = new mongoose.Schema({
     fieldName: {
         type: String,
         required: true,
-        enum: ['email', 'name', 'phone']
+        enum: ['email', 'name', 'phone'] // Champs dont on veut suivre les changements
     },
     oldValue: {
         type: String,
         required: true
     },
     newValue: {
-        type: String, 
+        type: String,
         required: true
     },
     changedAt: {
@@ -50,33 +50,40 @@ const UserSchema = new mongoose.Schema({
             /^\+?[0-9]{10,15}$/,
             'Veuillez fournir un numéro de téléphone valide'
         ],
-        sparse: true // Permet des valeurs null tout en maintenant l'unicité
+        sparse: true // Permet des valeurs null tout en maintenant l'unicité si défini
     },
     password: {
         type: String,
         required: [true, 'Veuillez fournir un mot de passe'],
         minlength: [6, 'Le mot de passe doit contenir au moins 6 caractères'],
-        select: false
+        select: false // Ne pas inclure par défaut dans les requêtes
     },
     role: {
         type: String,
         enum: ['user', 'admin'],
         default: 'user'
     },
+    // Champs pour la vérification d'email
     isEmailVerified: {
-        type: Boolean,
-        default: false
-    },
-    isPhoneVerified: {
         type: Boolean,
         default: false
     },
     emailVerificationToken: String,
     emailVerificationExpire: Date,
+    
+    // Champs pour la vérification de téléphone
+    isPhoneVerified: {
+        type: Boolean,
+        default: false
+    },
     phoneVerificationCode: String,
     phoneVerificationExpire: Date,
+    
+    // Champs pour la réinitialisation de mot de passe
     resetPasswordToken: String,
     resetPasswordExpire: Date,
+    
+    // Champs pour la gestion de la sécurité
     lastLogin: Date,
     accountLocked: {
         type: Boolean,
@@ -142,7 +149,7 @@ UserSchema.methods.getResetPasswordToken = function () {
     return resetToken;
 };
 
-// Générer un token pour la vérification d'email
+// Générer un token pour vérification d'email
 UserSchema.methods.getEmailVerificationToken = function () {
     // Générer un token
     const verificationToken = crypto.randomBytes(20).toString('hex');
@@ -159,9 +166,9 @@ UserSchema.methods.getEmailVerificationToken = function () {
     return verificationToken;
 };
 
-// Générer un code de vérification pour le téléphone
+// Générer un code de vérification pour téléphone
 UserSchema.methods.getPhoneVerificationCode = function () {
-    // Générer un code à 6 chiffres
+    // Générer un code de 6 chiffres
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     
     // Stocker le code et sa date d'expiration
@@ -171,8 +178,11 @@ UserSchema.methods.getPhoneVerificationCode = function () {
     return verificationCode;
 };
 
-// Méthode pour enregistrer l'historique des modifications
+// Méthode pour suivre l'historique des modifications
 UserSchema.methods.trackChange = function (fieldName, oldValue, newValue) {
+    if (!oldValue) oldValue = ''; // Gérer le cas où l'ancienne valeur est null
+    if (!newValue) newValue = ''; // Gérer le cas où la nouvelle valeur est null
+    
     this.changeHistory.push({
         fieldName,
         oldValue,

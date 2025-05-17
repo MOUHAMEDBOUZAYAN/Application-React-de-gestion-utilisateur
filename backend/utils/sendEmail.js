@@ -1,3 +1,4 @@
+// utils/sendEmail.js mis à jour pour une meilleure compatibilité avec Mailtrap
 // utils/sendEmail.js
 // Utilitaire pour envoyer des emails
 
@@ -12,41 +13,34 @@ const nodemailer = require('nodemailer');
  * @returns {Promise} Promesse résolue après l'envoi de l'email
  */
 const sendEmail = async (options) => {
-  // Créer un transporteur selon l'environnement
-  let transporter;
+  // Configuration du transporteur - en développement, on utilise Mailtrap par défaut
+  const transportConfig = {
+    host: process.env.SMTP_HOST || 'smtp.mailtrap.io',
+    port: process.env.SMTP_PORT || 2525,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD
+    }
+  };
   
-  if (process.env.NODE_ENV === 'production') {
-    // Configuration pour un service SMTP réel en production
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD
-      }
+  // Créer un transporteur
+  const transporter = nodemailer.createTransport(transportConfig);
+  
+  // En mode développement, on affiche les informations de configuration
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Configuration email:', {
+      host: transportConfig.host,
+      port: transportConfig.port,
+      secure: transportConfig.secure,
+      user: transportConfig.auth.user ? 'DÉFINI' : 'NON DÉFINI',
+      pass: transportConfig.auth.pass ? 'DÉFINI' : 'NON DÉFINI'
     });
-  } else {
-    // En développement, utiliser Ethereal pour les tests
-    // Créer un compte de test
-    const testAccount = await nodemailer.createTestAccount();
-    
-    transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass
-      }
-    });
-    
-    console.log('Compte de test Ethereal créé:', testAccount.user);
   }
 
   // Définir les options de l'email
   const mailOptions = {
-    from: `${process.env.FROM_NAME} <${process.env.FROM_EMAIL}>`,
+    from: `${process.env.FROM_NAME || '404.js Auth'} <${process.env.FROM_EMAIL || 'noreply@404js.com'}>`,
     to: options.email,
     subject: options.subject,
     text: options.message
@@ -57,15 +51,41 @@ const sendEmail = async (options) => {
     mailOptions.html = options.html;
   }
 
-  // Envoyer l'email
-  const info = await transporter.sendMail(mailOptions);
-
-  // Afficher l'URL de prévisualisation en développement
-  if (process.env.NODE_ENV === 'development') {
-    console.log('URL de prévisualisation:', nodemailer.getTestMessageUrl(info));
+  try {
+    // Envoyer l'email
+    const info = await transporter.sendMail(mailOptions);
+    
+    // En mode développement, afficher l'URL de prévisualisation si disponible (Mailtrap)
+    if (process.env.NODE_ENV === 'development') {
+      if (transportConfig.host.includes('mailtrap') && info.messageId) {
+        console.log('Email envoyé! Vérifiez Mailtrap. ID:', info.messageId);
+      } else if (info.messageUrl) {
+        console.log('URL de prévisualisation:', info.messageUrl);
+      } else {
+        console.log('Email envoyé avec succès:', info.response);
+      }
+    }
+    
+    return info;
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi de l\'email:', error);
+    
+    // En mode développement, simuler l'envoi pour pouvoir continuer à tester
+    if (process.env.NODE_ENV === 'development') {
+      console.log('⚠️ Mode développement: Simulation d\'envoi d\'email');
+      console.log('Destinataire:', options.email);
+      console.log('Sujet:', options.subject);
+      console.log('Message:', options.message);
+      
+      return {
+        simulated: true,
+        to: options.email,
+        subject: options.subject
+      };
+    }
+    
+    throw error;
   }
-
-  return info;
 };
 
 module.exports = sendEmail;

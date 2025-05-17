@@ -1,16 +1,16 @@
-// src/config/axiosConfig.js
+// axiosConfig.js - Mise à jour de l'URL du serveur
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-// Configuration de base simplifiée pour éviter les problèmes
+// Configuration de base avec l'URL correcte du backend
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:3000',
+  baseURL: 'http://localhost:5000/api', // ⚠️ URL mise à jour pour pointer vers votre API Express
   timeout: 15000, // 15 secondes de timeout
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  withCredentials: false // Important pour CORS en développement
+  withCredentials: true // Permettre l'envoi des cookies pour l'authentification
 });
 
 // Intercepteur pour les requêtes - Ajout automatique du token
