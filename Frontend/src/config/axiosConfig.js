@@ -1,10 +1,11 @@
-// axiosConfig.js - Mise à jour de l'URL du serveur
+// src/config/axiosConfig.js
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { API_URL } from './config';
 
 // Configuration de base avec l'URL correcte du backend
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:5000/api', // ⚠️ URL mise à jour pour pointer vers votre API Express
+  baseURL: API_URL,
   timeout: 15000, // 15 secondes de timeout
   headers: {
     'Content-Type': 'application/json',
@@ -24,8 +25,10 @@ axiosInstance.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Log pour débogage
-    console.log(`📤 Requête ${config.method?.toUpperCase()} envoyée vers ${config.url}`);
+    // Log pour débogage en développement
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`📤 Requête ${config.method?.toUpperCase()} envoyée vers ${config.url}`);
+    }
     
     return config;
   },
@@ -38,8 +41,10 @@ axiosInstance.interceptors.request.use(
 // Intercepteur simplifié pour les réponses
 axiosInstance.interceptors.response.use(
   (response) => {
-    // Log pour débogage
-    console.log(`📥 Réponse reçue de ${response.config.url} - Status: ${response.status}`);
+    // Log pour débogage en développement
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`📥 Réponse reçue de ${response.config.url} - Status: ${response.status}`);
+    }
     return response;
   },
   (error) => {
