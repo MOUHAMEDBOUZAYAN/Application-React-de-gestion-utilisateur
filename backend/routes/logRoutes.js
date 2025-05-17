@@ -1,22 +1,21 @@
 // routes/logRoutes.js
-// Routes pour la gestion des logs utilisateurs
+// Routes pour la gestion des logs (admin seulement)
 
 const express = require('express');
-const router = express.Router();
-const {
+const { 
   getLogs,
   getLogStats
 } = require('../controllers/logController');
-const {
-  protect,
-  authorize
-} = require('../middlewares/jwtAuth');
 
-// Protéger toutes les routes et limiter aux administrateurs
+const { protect, authorize } = require('../middlewares/jwtAuth');
+
+const router = express.Router();
+
+// Toutes les routes nécessitent une authentification
 router.use(protect);
+// Toutes les routes nécessitent le rôle admin
 router.use(authorize('admin'));
 
-// Routes pour les logs
 router.get('/', getLogs);
 router.get('/stats', getLogStats);
 

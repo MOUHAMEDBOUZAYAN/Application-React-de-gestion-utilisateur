@@ -1,37 +1,34 @@
-// routes/userRoutes.js (version entièrement corrigée)
-// Routes pour la gestion des utilisateurs
+// routes/userRoutes.js
+// Routes pour la gestion des utilisateurs (admin seulement)
 
 const express = require('express');
-const router = express.Router();
-const {
+const { 
   getUsers,
   getUser,
   createUser,
   updateUser,
   deleteUser
 } = require('../controllers/userController');
-const {
-  protect,
-  authorize
-} = require('../middlewares/jwtAuth');
-const {
-  registerValidationRules,
-  updateProfileValidationRules,
-  validationMiddleware
-} = require('../middlewares/validator');
 
-// Protéger toutes les routes et limiter aux administrateurs
+const { protect, authorize } = require('../middlewares/jwtAuth');
+const userLogger = require('../middlewares/userLogger');
+
+const router = express.Router();
+
+// Toutes les routes nécessitent une authentification
 router.use(protect);
+// Toutes les routes nécessitent le rôle admin
 router.use(authorize('admin'));
 
-// Routes CRUD pour les utilisateurs
-router.route('/')
+router
+  .route('/')
   .get(getUsers)
-  .post(registerValidationRules, validationMiddleware, createUser);
+  .post(userLogger('admin_create_user'), createUser);
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(getUser)
-  .put(updateProfileValidationRules, validationMiddleware, updateUser)
-  .delete(deleteUser);
+  .put(userLogger('admin_update_user'), updateUser)
+  .delete(userLogger('admin_delete_user'), deleteUser);
 
 module.exports = router;
