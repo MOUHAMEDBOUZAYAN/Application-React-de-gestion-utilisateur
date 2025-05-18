@@ -67,12 +67,22 @@ export const authService = {
     }
   },
 
-  // Récupérer le statut du compte
+  // Récupérer le statut du compte (modifié pour utiliser /auth/me)
   getAccountStatus: async () => {
     try {
-      const response = await axios.get('/auth/status');
-      return response.data;
+      // Cette route n'existe pas dans votre backend, on utilise "me" à la place
+      const response = await axios.get('/auth/me');
+      return {
+        success: true,
+        data: {
+          isEmailVerified: response.data.data.isEmailVerified || false,
+          isPhoneVerified: response.data.data.isPhoneVerified || false,
+          email: response.data.data.email,
+          phone: response.data.data.phone
+        }
+      };
     } catch (error) {
+      console.error('Erreur lors de la récupération du statut du compte:', error);
       throw error;
     }
   },
@@ -130,12 +140,21 @@ export const authService = {
     }
   },
 
-  // Vérifier l'email
+  // Vérifier l'email (corrigé avec validation de token)
   verifyEmail: async (token) => {
     try {
+      // Ajout de la vérification de la validité du token
+      if (!token) {
+        return {
+          success: false,
+          error: 'Token de vérification non fourni'
+        };
+      }
+      
       const response = await axios.get(`/auth/verifyemail/${token}`);
       return response.data;
     } catch (error) {
+      console.error('Erreur lors de la vérification de l\'email:', error);
       throw error;
     }
   },
@@ -146,6 +165,7 @@ export const authService = {
       const response = await axios.post('/auth/resendverificationemail');
       return response.data;
     } catch (error) {
+      console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);
       throw error;
     }
   },

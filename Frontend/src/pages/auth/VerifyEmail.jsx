@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from '../../config/axiosConfig';
 import { ROUTES } from '../../config/config';
+import toast from 'react-hot-toast';
 
 const VerifyEmail = () => {
   const [verificationStatus, setVerificationStatus] = useState({
@@ -17,24 +18,42 @@ const VerifyEmail = () => {
 
   useEffect(() => {
     const verifyEmailToken = async () => {
+      if (!token) {
+        setVerificationStatus({
+          isLoading: false,
+          isSuccess: false,
+          error: 'Token de vérification non valide'
+        });
+        return;
+      }
+
       try {
-        await axios.get(`/auth/verifyemail/${token}`);
+        console.log("Tentative de vérification avec le token:", token);
+        const response = await axios.get(`/auth/verifyemail/${token}`);
+        console.log("Réponse de vérification d'email:", response.data);
+        
         setVerificationStatus({
           isLoading: false,
           isSuccess: true,
           error: null
         });
 
+        toast.success('Votre adresse email a été vérifiée avec succès!');
+
         // Rediriger vers la page de connexion après 5 secondes
         setTimeout(() => {
           navigate(ROUTES.LOGIN);
         }, 5000);
       } catch (error) {
+        console.error("Erreur lors de la vérification de l'email:", error);
+        
         setVerificationStatus({
           isLoading: false,
           isSuccess: false,
           error: error.response?.data?.error || 'Une erreur est survenue lors de la vérification de votre email.'
         });
+        
+        toast.error(error.response?.data?.error || 'Échec de la vérification de l\'email');
       }
     };
 
