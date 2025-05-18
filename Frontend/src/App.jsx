@@ -13,12 +13,16 @@ import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
+import VerifyEmail from './pages/auth/VerifyEmail'
+import VerifyPhone from './pages/auth/VerifyPhone'
 import Profile from './pages/profile/Profile'
 import NotFound from './pages/NotFound'
 
 // Dashboard Pages
 import UserDashboard from './pages/dashboard/UserDashboard'
 import AdminDashboard from './pages/dashboard/AdminDashboard'
+import AddUser from './pages/admin/AddUser'
+import LogManagement from './pages/admin/LogManagement'
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute'
@@ -53,7 +57,6 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<NotFound />} />
         </Route>
 
         {/* Routes d'authentification avec AuthLayout */}
@@ -62,6 +65,19 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
+          <Route path="/verify-email/:token" element={<VerifyEmail />} />
+        </Route>
+
+        {/* Route de vérification du téléphone (nécessite authentification) */}
+        <Route element={<DashboardLayout />}>
+          <Route 
+            path="/verify-phone" 
+            element={
+              <ProtectedRoute>
+                <VerifyPhone />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* Routes protégées utilisateur */}
@@ -98,8 +114,23 @@ function App() {
             path="/admin/users" 
             element={
               <ProtectedRoute adminOnly={true}>
-                <AdminDashboard />
-                {/* Remplacer par votre composant de gestion des utilisateurs une fois créé */}
+                <LogManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/admin/users/add" 
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AddUser />
+              </ProtectedRoute>
+            }
+          />
+          <Route 
+            path="/admin/logs" 
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <LogManagement />
               </ProtectedRoute>
             }
           />
@@ -108,11 +139,13 @@ function App() {
             element={
               <ProtectedRoute adminOnly={true}>
                 <AdminDashboard />
-                {/* Remplacer par votre composant de paramètres système une fois créé */}
               </ProtectedRoute>
             }
           />
         </Route>
+
+        {/* Route pour les chemins non définis */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AnimatePresence>
   )

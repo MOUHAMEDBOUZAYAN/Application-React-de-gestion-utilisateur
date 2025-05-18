@@ -33,23 +33,6 @@ export function maskPhone(phone) {
 }
 
 /**
- * Formater une date en français
- * @param {string|Date} date - Date à formater
- * @returns {string} Date formatée
- */
-export function formatDate(date) {
-  if (!date) return '';
-  const d = new Date(date);
-  return d.toLocaleDateString('fr-FR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
-/**
  * Calculer la force d'un mot de passe
  * @param {string} password - Mot de passe à évaluer
  * @returns {number} Force du mot de passe (0-5)
@@ -96,6 +79,23 @@ export function isValidPhone(phone) {
 }
 
 /**
+ * Formater une date en français
+ * @param {string|Date} date - Date à formater
+ * @returns {string} Date formatée
+ */
+export function formatDate(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toLocaleDateString('fr-FR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
  * Tronquer un texte avec ellipsis
  * @param {string} text - Texte à tronquer
  * @param {number} maxLength - Longueur maximale
@@ -105,14 +105,3 @@ export function truncateText(text, maxLength = 100) {
   if (!text || text.length <= maxLength) return text;
   return text.slice(0, maxLength) + '...';
 }
-
-export default {
-  classNames,
-  maskEmail,
-  maskPhone,
-  formatDate,
-  calculatePasswordStrength,
-  isValidEmail,
-  isValidPhone,
-  truncateText
-};

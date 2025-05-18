@@ -1,4 +1,4 @@
-// src/store/authStore.jsx - Version corrigée pour le problème d'URLs
+// src/store/authStore.jsx
 import { create } from 'zustand';
 import toast from 'react-hot-toast';
 import axios from '../config/axiosConfig'; // Import depuis le fichier de configuration
@@ -14,7 +14,7 @@ export const useAuthStore = create((set, get) => ({
   checkAuth: async () => {
     const token = localStorage.getItem('token');
     if (!token) {
-      set({ isAuthenticated: false, user: null });
+      set({ isAuthenticated: false, user: null, isLoading: false });
       return false;
     }
 
@@ -23,11 +23,28 @@ export const useAuthStore = create((set, get) => ({
       // Récupérer les informations de l'utilisateur
       const response = await axios.get('/auth/me');
       
-      // Extraire les données utilisateur
+      // Extraire et forcer le type des données utilisateur
       const userData = response.data.data;
       
+      // S'assurer que les flags de vérification sont traités comme des booléens
+      const parsedUserData = {
+        ...userData,
+        isEmailVerified: !!userData.isEmailVerified,
+        isPhoneVerified: !!userData.isPhoneVerified
+      };
+      
+      // Debug des infos utilisateur
+      console.log("Infos utilisateur récupérées:", {
+        id: parsedUserData._id,
+        name: parsedUserData.name,
+        email: parsedUserData.email,
+        role: parsedUserData.role,
+        isEmailVerified: parsedUserData.isEmailVerified,
+        isPhoneVerified: parsedUserData.isPhoneVerified
+      });
+      
       set({ 
-        user: userData, 
+        user: parsedUserData, 
         isAuthenticated: true, 
         isLoading: false,
         error: null 
@@ -35,13 +52,18 @@ export const useAuthStore = create((set, get) => ({
       return true;
     } catch (error) {
       console.error('Erreur lors de la vérification de l\'authentification:', error);
-      localStorage.removeItem('token');
+      
+      // Si l'erreur est 401 Unauthorized, nettoyer le localStorage
+      if (error.response && error.response.status === 401) {
+        localStorage.removeItem('token');
+      }
+      
       set({ 
         user: null, 
         token: null, 
         isAuthenticated: false, 
         isLoading: false,
-        error: error.response?.data?.error || 'Erreur de connexion. Veuillez vous reconnecter.' 
+        error: error.response?.data?.error || 'Session expirée. Veuillez vous reconnecter.' 
       });
       return false;
     }
@@ -81,19 +103,26 @@ export const useAuthStore = create((set, get) => ({
       const { token, user } = response.data;
       
       // Stocker le token
-      localStorage.setItem('token', token);
-      
-      // Mettre à jour le state avec l'utilisateur
-      set({ 
-        token, 
-        user,
-        isAuthenticated: true, 
-        isLoading: false,
-        error: null 
-      });
-      
-      toast.success('Inscription réussie! Bienvenue!');
-      return true;
+      if (token) {
+        localStorage.setItem('token', token);
+        
+        // Mettre à jour le state avec l'utilisateur
+        set({ 
+          token, 
+          user,
+          isAuthenticated: true, 
+          isLoading: false,
+          error: null 
+        });
+        
+        toast.success('Inscription réussie! Bienvenue!');
+        return true;
+      } else {
+        // Si pas de token mais succès, c'est qu'une vérification est requise
+        toast.success(response.data.message || 'Inscription réussie! Veuillez vérifier votre email.');
+        set({ isLoading: false });
+        return true;
+      }
     } catch (error) {
       console.error('Erreur lors de l\'inscription:', error);
       let errorMessage = error.response?.data?.error || 'Erreur lors de l\'inscription. Veuillez réessayer.';
@@ -223,7 +252,7 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Mise à jour du mot de passe - CORRECTION
+  // Mise à jour du mot de passe
   updatePassword: async (passwordData) => {
     set({ isLoading: true, error: null });
     try {

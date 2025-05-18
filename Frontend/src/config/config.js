@@ -1,16 +1,10 @@
-// src/config/config.js
-// Configuration globale de l'application
-
-// URL de base de l'API - Modifiée pour s'assurer que l'URL de base est correcte
+// src/config/config.js - Modifications pour correspondre à votre structure
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-// Configuration de durée des notifications toast
 export const TOAST_DURATION = 5000; // 5 secondes
 
-// Configuration de pagination par défaut
 export const DEFAULT_PAGE_SIZE = 10;
 
-// Délai avant redirection automatique (en millisecondes)
 export const REDIRECT_DELAY = 3000; // 3 secondes
 
 // Configuration des routes

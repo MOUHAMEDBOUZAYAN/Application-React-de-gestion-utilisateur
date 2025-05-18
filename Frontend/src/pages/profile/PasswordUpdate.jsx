@@ -1,114 +1,103 @@
-// pages/profile/PasswordUpdate.jsx - Composant pour changer le mot de passe
-import React, { useState } from 'react';
+// src/pages/profile/components/PasswordUpdate.jsx
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../../store/authStore';
+import { calculatePasswordStrength } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 
 const PasswordUpdate = () => {
-  const { updatePassword, error, clearErrors, isLoading } = useAuthStore();
+  const { updatePassword, isLoading, error, clearErrors } = useAuthStore();
   
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
-    confirmNewPassword: ''
+    passwordConfirm: ''
   });
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(0);
+  const [passwordsMatch, setPasswordsMatch] = useState(true);
   
-  const [formErrors, setFormErrors] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmNewPassword: ''
-  });
+  // Effacer les erreurs au montage du composant
+  useEffect(() => {
+    clearErrors();
+  }, [clearErrors]);
+  
+  // Vérifier la force du mot de passe
+  useEffect(() => {
+    const strength = calculatePasswordStrength(formData.newPassword);
+    setPasswordStrength(strength);
+    
+    // Vérifier si les mots de passe correspondent
+    if (formData.passwordConfirm) {
+      setPasswordsMatch(formData.newPassword === formData.passwordConfirm);
+    }
+  }, [formData.newPassword, formData.passwordConfirm]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [name]: value
-    });
-    
-    // Effacer l'erreur du champ modifié
-    setFormErrors({
-      ...formErrors,
-      [name]: ''
-    });
-    
-    // Effacer les erreurs globales du store
-    if (error) {
-      clearErrors();
-    }
-  };
-  
-  const validateForm = () => {
-    let isValid = true;
-    const errors = {
-      currentPassword: '',
-      newPassword: '',
-      confirmNewPassword: ''
-    };
-    
-    // Validation du mot de passe actuel
-    if (!formData.currentPassword.trim()) {
-      errors.currentPassword = 'Le mot de passe actuel est requis';
-      isValid = false;
-    }
-    
-    // Validation du nouveau mot de passe
-    if (!formData.newPassword.trim()) {
-      errors.newPassword = 'Le nouveau mot de passe est requis';
-      isValid = false;
-    } else if (formData.newPassword.length < 6) {
-      errors.newPassword = 'Le mot de passe doit contenir au moins 6 caractères';
-      isValid = false;
-    }
-    
-    // Validation de la confirmation du mot de passe
-    if (!formData.confirmNewPassword.trim()) {
-      errors.confirmNewPassword = 'La confirmation du mot de passe est requise';
-      isValid = false;
-    } else if (formData.newPassword !== formData.confirmNewPassword) {
-      errors.confirmNewPassword = 'Les mots de passe ne correspondent pas';
-      isValid = false;
-    }
-    
-    setFormErrors(errors);
-    return isValid;
+    }));
   };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    // Validation des champs
+    if (!formData.currentPassword) {
+      toast.error('Le mot de passe actuel est requis');
       return;
     }
     
-    // Préparer les données pour l'API dans le format attendu par le backend
-    const passwordData = {
-      currentPassword: formData.currentPassword,
-      newPassword: formData.newPassword,
-      passwordConfirm: formData.confirmNewPassword // Assurez-vous que ce nom correspond à ce que le backend attend
-    };
+    if (!formData.newPassword) {
+      toast.error('Le nouveau mot de passe est requis');
+      return;
+    }
     
-    const success = await updatePassword(passwordData);
+    if (formData.newPassword.length < 8) {
+      toast.error('Le mot de passe doit comporter au moins 8 caractères');
+      return;
+    }
     
+    if (passwordStrength < 3) {
+      toast.error('Le mot de passe n\'est pas assez fort');
+      return;
+    }
+    
+    if (!passwordsMatch) {
+      toast.error('Les mots de passe ne correspondent pas');
+      return;
+    }
+    
+    const success = await updatePassword(formData);
     if (success) {
-      // Réinitialiser le formulaire après la mise à jour
+      // Réinitialiser le formulaire
       setFormData({
         currentPassword: '',
         newPassword: '',
-        confirmNewPassword: ''
+        passwordConfirm: ''
       });
-      
-      toast.success('Votre mot de passe a été mis à jour avec succès!');
     }
   };
   
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-6"
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+        Modifier votre mot de passe
+      </h3>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+          {error}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Mot de passe actuel */}
         <div>
           <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -116,21 +105,17 @@ const PasswordUpdate = () => {
           </label>
           <div className="relative">
             <input
-              type="password"
+              type={showPasswords ? 'text' : 'password'}
               id="currentPassword"
               name="currentPassword"
               value={formData.currentPassword}
               onChange={handleChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white
-                ${formErrors.currentPassword ? 'border-red-500 focus:ring-red-200 dark:focus:ring-red-900' : 'border-gray-300 focus:ring-primary-200 dark:focus:ring-primary-900'}`}
-              placeholder="Entrez votre mot de passe actuel"
+              className="block w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+              disabled={isLoading}
             />
-            {formErrors.currentPassword && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{formErrors.currentPassword}</p>
-            )}
           </div>
         </div>
-
+        
         {/* Nouveau mot de passe */}
         <div>
           <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -138,71 +123,96 @@ const PasswordUpdate = () => {
           </label>
           <div className="relative">
             <input
-              type="password"
+              type={showPasswords ? 'text' : 'password'}
               id="newPassword"
               name="newPassword"
               value={formData.newPassword}
               onChange={handleChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white
-                ${formErrors.newPassword ? 'border-red-500 focus:ring-red-200 dark:focus:ring-red-900' : 'border-gray-300 focus:ring-primary-200 dark:focus:ring-primary-900'}`}
-              placeholder="Entrez votre nouveau mot de passe"
+              className="block w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+              disabled={isLoading}
             />
-            {formErrors.newPassword && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{formErrors.newPassword}</p>
-            )}
           </div>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Le mot de passe doit contenir au moins 6 caractères
-          </p>
+          
+          {/* Indicateur de force du mot de passe */}
+          {formData.newPassword && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full ${
+                      passwordStrength <= 1
+                        ? 'bg-red-500'
+                        : passwordStrength < 4
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min(100, passwordStrength * 20)}%` }}
+                  ></div>
+                </div>
+                <span className="ml-2 text-xs text-gray-500">
+                  {passwordStrength <= 1
+                    ? 'Faible'
+                    : passwordStrength < 4
+                      ? 'Moyen'
+                      : 'Fort'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Utilisez au moins 8 caractères, avec des majuscules, des chiffres et des caractères spéciaux.
+              </p>
+            </div>
+          )}
         </div>
-
-        {/* Confirmation du nouveau mot de passe */}
+        
+        {/* Confirmation du mot de passe */}
         <div>
-          <label htmlFor="confirmNewPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label htmlFor="passwordConfirm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Confirmer le nouveau mot de passe
           </label>
           <div className="relative">
             <input
-              type="password"
-              id="confirmNewPassword"
-              name="confirmNewPassword"
-              value={formData.confirmNewPassword}
+              type={showPasswords ? 'text' : 'password'}
+              id="passwordConfirm"
+              name="passwordConfirm"
+              value={formData.passwordConfirm}
               onChange={handleChange}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-white
-                ${formErrors.confirmNewPassword ? 'border-red-500 focus:ring-red-200 dark:focus:ring-red-900' : 'border-gray-300 focus:ring-primary-200 dark:focus:ring-primary-900'}`}
-              placeholder="Confirmez votre nouveau mot de passe"
+              className={`block w-full px-4 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:outline-none dark:bg-gray-700 dark:text-white
+                ${formData.passwordConfirm && !passwordsMatch
+                  ? 'border-red-500 focus:border-red-500 dark:border-red-500'
+                  : 'border-gray-300 focus:border-primary-500 dark:border-gray-600'}`}
+              disabled={isLoading}
             />
-            {formErrors.confirmNewPassword && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{formErrors.confirmNewPassword}</p>
-            )}
           </div>
+          
+          {formData.passwordConfirm && !passwordsMatch && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+              Les mots de passe ne correspondent pas
+            </p>
+          )}
         </div>
-
-        {/* Affichage des erreurs globales */}
-        {error && (
-          <div className="bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-lg">
-            {error}
-          </div>
-        )}
-
+        
+        {/* Afficher les mots de passe */}
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="showPasswords"
+            checked={showPasswords}
+            onChange={() => setShowPasswords(!showPasswords)}
+            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+          />
+          <label htmlFor="showPasswords" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+            Afficher les mots de passe
+          </label>
+        </div>
+        
         {/* Bouton de soumission */}
-        <div className="flex justify-end">
+        <div className="pt-4">
           <button
             type="submit"
-            disabled={isLoading}
-            className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading || !formData.currentPassword || !formData.newPassword || !formData.passwordConfirm || !passwordsMatch || passwordStrength < 2}
           >
-            {isLoading ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Chargement...
-              </span>
-            ) : (
-              'Mettre à jour le mot de passe'
-            )}
+            {isLoading ? 'Mise à jour en cours...' : 'Mettre à jour le mot de passe'}
           </button>
         </div>
       </form>
