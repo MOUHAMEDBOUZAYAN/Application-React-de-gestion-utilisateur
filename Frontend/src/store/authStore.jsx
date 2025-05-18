@@ -1,4 +1,4 @@
-// src/store/authStore.jsx - Version corrigée pour le problème de mot de passe
+// src/store/authStore.jsx - Version corrigée pour le problème d'URLs
 import { create } from 'zustand';
 import toast from 'react-hot-toast';
 import axios from '../config/axiosConfig'; // Import depuis le fichier de configuration
@@ -21,7 +21,7 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true });
     try {
       // Récupérer les informations de l'utilisateur
-      const response = await axios.get('/api/auth/me');
+      const response = await axios.get('/auth/me');
       
       // Extraire les données utilisateur
       const userData = response.data.data;
@@ -57,7 +57,7 @@ export const useAuthStore = create((set, get) => ({
   checkEmailAvailability: async (email) => {
     try {
       set({ isLoading: true });
-      const response = await axios.post('/api/auth/check-email', { email });
+      const response = await axios.post('/auth/check-email', { email });
       set({ isLoading: false });
       return response.data.available; // true si l'email est disponible
     } catch (error) {
@@ -76,7 +76,7 @@ export const useAuthStore = create((set, get) => ({
         console.warn('Rôle non spécifié ou invalide dans register, utilisation de la valeur par défaut');
       }
       
-      const response = await axios.post('/api/auth/register', userData);
+      const response = await axios.post('/auth/register', userData);
       
       const { token, user } = response.data;
       
@@ -113,7 +113,7 @@ export const useAuthStore = create((set, get) => ({
   login: async (credentials) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.post('/api/auth/login', credentials);
+      const response = await axios.post('/auth/login', credentials);
       
       const { token, user } = response.data;
       
@@ -146,7 +146,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       // Appel API pour déconnecter côté serveur
       if (get().token) {
-        await axios.get('/api/auth/logout');
+        await axios.get('/auth/logout');
       }
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
@@ -171,7 +171,7 @@ export const useAuthStore = create((set, get) => ({
   forgotPassword: async (email) => {
     set({ isLoading: true, error: null });
     try {
-      await axios.post('/api/auth/forgotpassword', { email });
+      await axios.post('/auth/forgotpassword', { email });
       set({ isLoading: false });
       toast.success('Un email de réinitialisation a été envoyé à votre adresse email.');
       return true;
@@ -188,7 +188,7 @@ export const useAuthStore = create((set, get) => ({
   resetPassword: async (token, password) => {
     set({ isLoading: true, error: null });
     try {
-      await axios.put(`/api/auth/resetpassword/${token}`, { password });
+      await axios.put(`/auth/resetpassword/${token}`, { password });
       set({ isLoading: false });
       toast.success('Votre mot de passe a été réinitialisé. Vous pouvez maintenant vous connecter.');
       return true;
@@ -205,7 +205,7 @@ export const useAuthStore = create((set, get) => ({
   updateProfile: async (userData) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.put('/api/auth/updatedetails', userData);
+      const response = await axios.put('/auth/updateprofile', userData);
       set({ 
         user: response.data.data, 
         isLoading: false,
@@ -246,7 +246,7 @@ export const useAuthStore = create((set, get) => ({
       }
       
       // Appel API
-      await axios.put('/api/auth/updatepassword', {
+      await axios.put('/auth/updatepassword', {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
         passwordConfirm: passwordData.passwordConfirm

@@ -1,8 +1,8 @@
 // src/config/config.js
 // Configuration globale de l'application
 
-// URL de base de l'API
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// URL de base de l'API - Modifiée pour s'assurer que l'URL de base est correcte
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Configuration de durée des notifications toast
 export const TOAST_DURATION = 5000; // 5 secondes

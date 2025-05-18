@@ -5,7 +5,7 @@ import { API_URL } from './config';
 
 // Configuration de base avec l'URL correcte du backend
 const axiosInstance = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api`, // Ajout de /api pour éviter la duplication dans les appels
   timeout: 15000, // 15 secondes de timeout
   headers: {
     'Content-Type': 'application/json',

@@ -9,6 +9,148 @@ const asyncHandler = require('../middlewares/asyncHandler');
 const sendEmail = require('../utils/sendEmail');
 const sendSMS = require('../utils/sendSMS');
 
+// @desc    Inscription d'un utilisateur
+// @route   POST /api/auth/register
+// @access  Public
+// Fonction register modifiée pour authController.js
+// Cette fonction gère mieux les erreurs d'envoi d'email
+
+// @desc    Inscription d'un utilisateur
+// @route   POST /api/auth/register
+// @access  Public
+exports.register = asyncHandler(async (req, res, next) => {
+  const { name, email, password, phone } = req.body;
+
+  // Vérifier si l'email existe déjà
+  const userExists = await User.findOne({ email });
+
+  if (userExists) {
+    return next(new ErrorResponse('Un utilisateur avec cet email existe déjà', 400));
+  }
+
+  // Vérifier si le téléphone existe déjà (si fourni)
+  if (phone) {
+    const phoneExists = await User.findOne({ phone });
+    if (phoneExists) {
+      return next(new ErrorResponse('Ce numéro de téléphone est déjà utilisé', 400));
+    }
+  }
+
+  // Créer l'utilisateur
+  const user = await User.create({
+    name,
+    email,
+    password,
+    phone,
+    role: req.body.role || 'user' // Utiliser le rôle fourni ou 'user' par défaut
+  });
+
+  // Générer un token de vérification d'email
+  const emailVerificationToken = user.getEmailVerificationToken();
+  await user.save({ validateBeforeSave: false });
+
+  // Créer l'URL de vérification
+  const verifyEmailUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${emailVerificationToken}`;
+  const frontendVerifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerificationToken}`;
+
+  const message = `
+    Bienvenue sur notre plateforme! Pour finaliser votre inscription, veuillez vérifier votre adresse email:
+    \n\n${frontendVerifyUrl}\n\n
+    Ce lien expirera dans 24 heures.
+  `;
+
+  try {
+    // Tentative d'envoi d'email
+    const emailResult = await sendEmail({
+      email: user.email,
+      subject: 'Vérification de votre adresse email',
+      message,
+      html: `
+        <h1>Bienvenue sur notre plateforme!</h1>
+        <p>Pour finaliser votre inscription, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous:</p>
+        <p>
+          <a href="${frontendVerifyUrl}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+            Vérifier mon email
+          </a>
+        </p>
+        <p>Ce lien expirera dans 24 heures.</p>
+      `
+    });
+
+    // Vérifier si l'email a été simulé (développement)
+    const isSimulated = emailResult && emailResult.simulated;
+    if (isSimulated && process.env.NODE_ENV === 'development') {
+      // En développement, si l'email est simulé, valider automatiquement l'email
+      user.isEmailVerified = true;
+      await user.save();
+      console.log('Mode développement: email automatiquement vérifié pour', user.email);
+    }
+
+    // Envoyer un code de vérification par SMS si un téléphone est fourni
+    if (phone) {
+      try {
+        const phoneVerificationCode = user.getPhoneVerificationCode();
+        await user.save({ validateBeforeSave: false });
+
+        await sendSMS({
+          to: phone,
+          message: `Bienvenue sur 404.js! Votre code de vérification est: ${phoneVerificationCode}. Il expirera dans 10 minutes.`
+        });
+      } catch (smsError) {
+        console.error('Erreur d\'envoi de SMS:', smsError);
+        // Ne pas bloquer l'inscription si l'envoi de SMS échoue
+      }
+    }
+
+    // Journaliser l'inscription
+    await UserLog.create({
+      user: user._id,
+      action: 'register',
+      description: `${user.email} s'est inscrit`,
+      ip: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    // Si nous sommes en développement et que l'email est simulé, connecter l'utilisateur directement
+    if (isSimulated && process.env.NODE_ENV === 'development') {
+      return sendTokenResponse(user, 201, res, req);
+    }
+
+    // Sinon, envoyer une réponse avec des informations sur l'inscription
+    res.status(201).json({
+      success: true,
+      message: 'Inscription réussie. Veuillez vérifier votre email pour activer votre compte.',
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        phone: user.phone
+      }
+    });
+  } catch (err) {
+    console.error('Erreur lors de l\'inscription:', err);
+    
+    // Nettoyer les données de vérification en cas d'erreur
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    user.phoneVerificationCode = undefined;
+    user.phoneVerificationExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    // Si nous sommes en développement, connecter l'utilisateur malgré l'erreur d'email
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Mode développement: connexion de l\'utilisateur malgré l\'erreur d\'email');
+      user.isEmailVerified = true; // Simuler la vérification
+      await user.save();
+      return sendTokenResponse(user, 201, res, req);
+    }
+
+    return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de vérification. Veuillez réessayer.', 500));
+  }
+});
+
 // @desc    Connexion d'un utilisateur
 // @route   POST /api/auth/login
 // @access  Public
@@ -294,7 +436,7 @@ exports.updateProfile = asyncHandler(async (req, res, next) => {
     await user.save({ validateBeforeSave: false });
 
     // Créer l'URL de vérification
-    const verifyEmailUrl = `${req.protocol}://${req.get('host')}/api/auth/verifynewemail/${emailVerificationToken}`;
+    const verifyEmailUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${emailVerificationToken}`;
     const frontendVerifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerificationToken}`;
 
     const message = `
@@ -387,6 +529,234 @@ exports.updateProfile = asyncHandler(async (req, res, next) => {
       ? 'Profil mis à jour. Veuillez vérifier votre email ou téléphone pour confirmer les modifications.'
       : 'Profil mis à jour avec succès.'
   });
+});
+
+// @desc    Vérifier l'email d'un utilisateur
+// @route   GET /api/auth/verifyemail/:token
+// @access  Public
+exports.verifyEmail = asyncHandler(async (req, res, next) => {
+  // Récupérer le token depuis l'URL et le hacher
+  const emailVerificationToken = crypto
+    .createHash('sha256')
+    .update(req.params.token)
+    .digest('hex');
+
+  // Trouver l'utilisateur avec le token et vérifier qu'il n'a pas expiré
+  const user = await User.findOne({
+    emailVerificationToken,
+    emailVerificationExpire: { $gt: Date.now() }
+  });
+
+  if (!user) {
+    return next(new ErrorResponse('Token de vérification invalide ou expiré', 400));
+  }
+
+  // Mettre à jour le statut de vérification
+  user.isEmailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpire = undefined;
+  
+  // Si un nouvel email est en attente, le mettre à jour
+  if (user._newEmail) {
+    user.email = user._newEmail;
+    user._newEmail = undefined;
+  }
+  
+  await user.save();
+
+  // Journaliser la vérification
+  await UserLog.create({
+    user: user._id,
+    action: 'verify_email',
+    description: `Email vérifié pour ${user.email}`,
+    ip: req.ip || req.connection.remoteAddress,
+    userAgent: req.headers['user-agent']
+  });
+
+  // Rediriger vers le frontend avec un message de succès
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  res.redirect(`${frontendUrl}/email-verified?success=true`);
+});
+
+// @desc    Vérifier le téléphone d'un utilisateur
+// @route   POST /api/auth/verifyphone
+// @access  Private
+exports.verifyPhone = asyncHandler(async (req, res, next) => {
+  const { verificationCode } = req.body;
+
+  // Récupérer l'utilisateur
+  const user = await User.findById(req.user.id);
+
+  // Vérifier si l'utilisateur a un code de vérification en attente
+  if (!user.phoneVerificationCode || !user.phoneVerificationExpire) {
+    return next(new ErrorResponse('Aucun code de vérification en attente', 400));
+  }
+
+  // Vérifier si le code a expiré
+  if (user.phoneVerificationExpire < Date.now()) {
+    // Nettoyer les données de vérification
+    user.phoneVerificationCode = undefined;
+    user.phoneVerificationExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+    
+    return next(new ErrorResponse('Le code de vérification a expiré', 400));
+  }
+
+  // Vérifier si le code correspond
+  if (user.phoneVerificationCode !== verificationCode) {
+    return next(new ErrorResponse('Code de vérification invalide', 400));
+  }
+
+  // Si un nouveau téléphone est en attente, le mettre à jour
+  if (user._newPhone) {
+    user.phone = user._newPhone;
+    user._newPhone = undefined;
+  }
+
+  // Mettre à jour le statut de vérification
+  user.isPhoneVerified = true;
+  user.phoneVerificationCode = undefined;
+  user.phoneVerificationExpire = undefined;
+  
+  await user.save();
+
+  // Journaliser la vérification
+  await UserLog.create({
+    user: user._id,
+    action: 'verify_phone',
+    description: `Téléphone vérifié pour ${user.email}`,
+    ip: req.ip || req.connection.remoteAddress,
+    userAgent: req.headers['user-agent']
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Téléphone vérifié avec succès',
+    data: {
+      phone: user.phone,
+      isPhoneVerified: user.isPhoneVerified
+    }
+  });
+});
+
+// @desc    Renvoyer l'email de vérification
+// @route   POST /api/auth/resendverificationemail
+// @access  Private
+exports.resendVerificationEmail = asyncHandler(async (req, res, next) => {
+  // Récupérer l'utilisateur
+  const user = await User.findById(req.user.id);
+
+  // Vérifier si l'email est déjà vérifié
+  if (user.isEmailVerified && !user._newEmail) {
+    return next(new ErrorResponse('Votre email est déjà vérifié', 400));
+  }
+
+  // Générer un nouveau token de vérification
+  const emailVerificationToken = user.getEmailVerificationToken();
+  await user.save({ validateBeforeSave: false });
+
+  // Créer l'URL de vérification
+  const verifyEmailUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${emailVerificationToken}`;
+  const frontendVerifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerificationToken}`;
+
+  // Déterminer l'email auquel envoyer la vérification
+  const targetEmail = user._newEmail || user.email;
+
+  const message = `
+    Veuillez cliquer sur le lien suivant pour vérifier votre adresse email:
+    \n\n${frontendVerifyUrl}\n\n
+    Ce lien expirera dans 24 heures.
+  `;
+
+  try {
+    await sendEmail({
+      email: targetEmail,
+      subject: 'Vérification de votre adresse email',
+      message,
+      html: `
+        <p>Veuillez cliquer sur le bouton suivant pour vérifier votre adresse email:</p>
+        <p>
+          <a href="${frontendVerifyUrl}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+            Vérifier mon email
+          </a>
+        </p>
+        <p>Ce lien expirera dans 24 heures.</p>
+      `
+    });
+
+    // Journaliser l'envoi
+    await UserLog.create({
+      user: user._id,
+      action: 'resend_verification_email',
+      description: `Nouvel email de vérification envoyé à ${targetEmail}`,
+      ip: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Email de vérification envoyé à ${targetEmail}`
+    });
+  } catch (err) {
+    console.error('Erreur d\'envoi d\'email:', err);
+    
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de vérification', 500));
+  }
+});
+
+// @desc    Renvoyer le SMS de vérification
+// @route   POST /api/auth/resendverificationsms
+// @access  Private
+exports.resendVerificationSMS = asyncHandler(async (req, res, next) => {
+  // Récupérer l'utilisateur
+  const user = await User.findById(req.user.id);
+
+  // Vérifier si le téléphone est déjà vérifié
+  if (user.isPhoneVerified && !user._newPhone) {
+    return next(new ErrorResponse('Votre téléphone est déjà vérifié', 400));
+  }
+// Vérifier si un téléphone est défini
+  const targetPhone = user._newPhone || user.phone;
+  if (!targetPhone) {
+    return next(new ErrorResponse('Aucun numéro de téléphone défini', 400));
+  }
+
+  // Générer un nouveau code de vérification
+  const phoneVerificationCode = user.getPhoneVerificationCode();
+  await user.save({ validateBeforeSave: false });
+
+  try {
+    await sendSMS({
+      to: targetPhone,
+      message: `Votre code de vérification pour 404.js est: ${phoneVerificationCode}. Il expirera dans 10 minutes.`
+    });
+
+    // Journaliser l'envoi
+    await UserLog.create({
+      user: user._id,
+      action: 'resend_verification_sms',
+      description: `Nouveau SMS de vérification envoyé à ${targetPhone}`,
+      ip: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `SMS de vérification envoyé à ${targetPhone}`
+    });
+  } catch (error) {
+    console.error('Erreur d\'envoi de SMS:', error);
+    
+    user.phoneVerificationCode = undefined;
+    user.phoneVerificationExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse('Erreur lors de l\'envoi du SMS de vérification', 500));
+  }
 });
 
 // @desc    Vérifier le nouveau email
