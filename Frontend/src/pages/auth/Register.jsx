@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
+import { checkServerStatus } from '../../utils/authUtils'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -15,10 +16,24 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState(0)
   const [passwordsMatch, setPasswordsMatch] = useState(true)
-  const [emailError, setEmailError] = useState('') // Nouvel état pour les erreurs d'email
+  const [emailError, setEmailError] = useState('') // État pour les erreurs d'email
+  const [isServerAvailable, setIsServerAvailable] = useState(true) // Nouvel état pour vérifier la disponibilité du serveur
   
   const { register, isLoading, error, clearErrors, isAuthenticated, user } = useAuthStore()
   const navigate = useNavigate()
+  
+  // Vérifier si le serveur est accessible
+  useEffect(() => {
+    const verifyServerConnection = async () => {
+      const status = await checkServerStatus();
+      setIsServerAvailable(status);
+      if (!status) {
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      }
+    };
+    
+    verifyServerConnection();
+  }, []);
   
   // Rediriger si déjà authentifié
   useEffect(() => {
@@ -78,6 +93,12 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    // Vérifier d'abord si le serveur est disponible
+    if (!isServerAvailable) {
+      toast.error('Le serveur est inaccessible. Veuillez vérifier votre connexion et si le serveur backend est démarré.');
+      return;
+    }
+    
     // Vérifier que les mots de passe correspondent
     if (formData.password !== formData.passwordConfirm) {
       setPasswordsMatch(false)
@@ -112,8 +133,13 @@ const Register = () => {
       // Gérer l'erreur ici si nécessaire
       console.error("Erreur lors de l'inscription:", err)
       
+      // Vérifier si l'erreur est liée à la connexion au serveur
+      if (err.message && err.message.includes("Network Error")) {
+        setIsServerAvailable(false);
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      }
       // Vous pouvez vérifier si l'erreur est liée à l'email
-      if (err.message && err.message.includes("email")) {
+      else if (err.message && err.message.includes("email")) {
         setEmailError("Cet email est déjà utilisé. Veuillez vous connecter ou utiliser une autre adresse email.")
       }
     }
@@ -122,6 +148,20 @@ const Register = () => {
   // Fonction pour se connecter directement (si l'email existe déjà)
   const handleLoginRedirect = () => {
     navigate('/login', { state: { email: formData.email } })
+  }
+  
+  // Fonction pour tenter de reconnecter au serveur
+  const handleRetryConnection = async () => {
+    toast.loading('Tentative de connexion au serveur...');
+    const status = await checkServerStatus();
+    setIsServerAvailable(status);
+    toast.dismiss();
+    
+    if (status) {
+      toast.success('Connexion au serveur rétablie!');
+    } else {
+      toast.error('Le serveur est toujours inaccessible. Veuillez vérifier qu\'il est bien démarré.');
+    }
   }
   
   return (
@@ -134,6 +174,32 @@ const Register = () => {
       >
         Créer un compte
       </motion.h2>
+      
+      {/* Message d'erreur sur la disponibilité du serveur */}
+      {!isServerAvailable && (
+        <motion.div 
+          className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-start">
+            <svg className="h-5 w-5 text-red-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <strong className="font-bold">Problème de connexion!</strong>
+              <p className="mt-1">Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.</p>
+              <button 
+                onClick={handleRetryConnection}
+                className="mt-2 bg-red-200 hover:bg-red-300 text-red-800 font-medium py-1 px-3 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Réessayer la connexion
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
       
       {error && !error.includes("email est déjà utilisé") && (
         <motion.div 
@@ -172,7 +238,7 @@ const Register = () => {
         </motion.div>
       )}
       
-      {!passwordsMatch && (
+      {!passwordsMatch && formData.passwordConfirm && (
         <motion.div 
           className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative"
           initial={{ opacity: 0, scale: 0.9 }}
@@ -198,7 +264,7 @@ const Register = () => {
             required
             className="input"
             placeholder="John Doe"
-            disabled={isLoading}
+            disabled={isLoading || !isServerAvailable}
           />
         </div>
         
@@ -215,7 +281,7 @@ const Register = () => {
             required
             className={`input ${emailError ? 'border-yellow-500 focus:ring-yellow-500 focus:border-yellow-500' : ''}`}
             placeholder="exemple@domaine.com"
-            disabled={isLoading}
+            disabled={isLoading || !isServerAvailable}
           />
           {emailError && (
             <p className="text-yellow-600 text-sm mt-1">
@@ -237,7 +303,7 @@ const Register = () => {
                 checked={formData.role === 'user'}
                 onChange={handleChange}
                 className="hidden peer"
-                disabled={isLoading}
+                disabled={isLoading || !isServerAvailable}
               />
               <label
                 htmlFor="role-user"
@@ -261,7 +327,7 @@ const Register = () => {
                 checked={formData.role === 'admin'}
                 onChange={handleChange}
                 className="hidden peer"
-                disabled={isLoading}
+                disabled={isLoading || !isServerAvailable}
               />
               <label
                 htmlFor="role-admin"
@@ -306,12 +372,13 @@ const Register = () => {
               required
               className="input pr-10"
               placeholder="••••••••"
-              disabled={isLoading}
+              disabled={isLoading || !isServerAvailable}
             />
             <button
               type="button"
               className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500"
               onClick={() => setShowPassword(!showPassword)}
+              disabled={isLoading || !isServerAvailable}
             >
               {showPassword ? (
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -376,7 +443,7 @@ const Register = () => {
                 : ''
             }`}
             placeholder="••••••••"
-            disabled={isLoading}
+            disabled={isLoading || !isServerAvailable}
           />
           
           {formData.password && 
@@ -397,7 +464,8 @@ const Register = () => {
             passwordStrength < 2 ||
             !formData.password ||
             !formData.passwordConfirm ||
-            emailError // Désactiver le bouton si l'email est déjà utilisé
+            emailError || // Désactiver le bouton si l'email est déjà utilisé
+            !isServerAvailable // Désactiver le bouton si le serveur n'est pas disponible
           }
         >
           {isLoading ? (
@@ -408,6 +476,8 @@ const Register = () => {
               </svg>
               Inscription en cours...
             </div>
+          ) : !isServerAvailable ? (
+            'Serveur inaccessible'
           ) : (
             'S\'inscrire'
           )}

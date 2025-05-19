@@ -1,912 +1,695 @@
 // controllers/authController.js
-// Contrôleur pour l'authentification des utilisateurs
-
 const crypto = require('crypto');
 const User = require('../models/User');
-const UserLog = require('../models/UserLog');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middlewares/asyncHandler');
 const sendEmail = require('../utils/sendEmail');
 const sendSMS = require('../utils/sendSMS');
+const UserLog = require('../models/UserLog');
+const jwt = require('jsonwebtoken');
 
-// @desc    Inscription d'un utilisateur
-// @route   POST /api/auth/register
-// @access  Public
-// Fonction register modifiée pour authController.js
-// Cette fonction gère mieux les erreurs d'envoi d'email
-
-// @desc    Inscription d'un utilisateur
-// @route   POST /api/auth/register
-// @access  Public
+/**
+ * @desc    Enregistrer un nouvel utilisateur
+ * @route   POST /api/auth/register
+ * @access  Public
+ */
 exports.register = asyncHandler(async (req, res, next) => {
-  const { name, email, password, phone } = req.body;
-
-  // Vérifier si l'email existe déjà
-  const userExists = await User.findOne({ email });
-
-  if (userExists) {
-    return next(new ErrorResponse('Un utilisateur avec cet email existe déjà', 400));
-  }
-
-  // Vérifier si le téléphone existe déjà (si fourni)
-  if (phone) {
-    const phoneExists = await User.findOne({ phone });
-    if (phoneExists) {
-      return next(new ErrorResponse('Ce numéro de téléphone est déjà utilisé', 400));
-    }
-  }
-
+  const { name, email, password, passwordConfirm } = req.body;
+  
   // Créer l'utilisateur
   const user = await User.create({
     name,
     email,
     password,
-    phone,
-    role: req.body.role || 'user' // Utiliser le rôle fourni ou 'user' par défaut
+    passwordConfirm
   });
-
+  
   // Générer un token de vérification d'email
-  const emailVerificationToken = user.getEmailVerificationToken();
+  const verificationToken = user.createEmailVerificationToken();
   await user.save({ validateBeforeSave: false });
-
-  // Créer l'URL de vérification
-  const verifyEmailUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${emailVerificationToken}`;
-  const frontendVerifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerificationToken}`;
-
+  
+  // URL de vérification
+  const verificationURL = `${req.protocol}://${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+  
   const message = `
-    Bienvenue sur notre plateforme! Pour finaliser votre inscription, veuillez vérifier votre adresse email:
-    \n\n${frontendVerifyUrl}\n\n
-    Ce lien expirera dans 24 heures.
+    Bienvenue sur notre plateforme! Veuillez cliquer sur le lien suivant pour vérifier votre adresse email: 
+    ${verificationURL}
   `;
-
+  
   try {
-    // Tentative d'envoi d'email
-    const emailResult = await sendEmail({
-      email: user.email,
-      subject: 'Vérification de votre adresse email',
-      message,
-      html: `
-        <h1>Bienvenue sur notre plateforme!</h1>
-        <p>Pour finaliser votre inscription, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous:</p>
-        <p>
-          <a href="${frontendVerifyUrl}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-            Vérifier mon email
-          </a>
-        </p>
-        <p>Ce lien expirera dans 24 heures.</p>
-      `
-    });
-
-
-    // controllers/authController.js
-
-// Ajouter cette nouvelle méthode pour le renvoi d'email sans authentification
-exports.resendPublicVerificationEmail = async (req, res, next) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        error: 'L\'adresse email est requise'
-      });
-    }
-    
-    // Rechercher l'utilisateur par email
-    const user = await User.findOne({ email });
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'Aucun utilisateur trouvé avec cette adresse email'
-      });
-    }
-    
-    // Si l'email est déjà vérifié
-    if (user.isEmailVerified) {
-      return res.status(400).json({
-        success: false,
-        error: 'Cet email est déjà vérifié'
-      });
-    }
-    
-    // Générer un nouveau token de vérification
-    const verificationToken = crypto.randomBytes(20).toString('hex');
-    
-    // Mettre à jour l'utilisateur avec le nouveau token
-    user.emailVerificationToken = verificationToken;
-    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 heures
-    await user.save();
-    
-    // Envoyer l'email de vérification
-    // Créer l'URL de vérification
-    const verificationUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${verificationToken}`;
-    
-    // Message de l'email
-    const message = `
-      <h1>Vérification de votre adresse e-mail</h1>
-      <p>Veuillez cliquer sur le lien suivant pour vérifier votre adresse e-mail :</p>
-      <a href="${verificationUrl}" clicktracking=off>${verificationUrl}</a>
-    `;
-    
     await sendEmail({
       email: user.email,
-      subject: 'Vérification de votre adresse e-mail',
+      subject: 'Vérification de votre adresse email',
       message
     });
     
-    res.status(200).json({
-      success: true,
-      message: 'Email de vérification envoyé'
-    });
-  } catch (error) {
-    console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de l\'envoi de l\'email de vérification'
-    });
-  }
-};
-
-    // Vérifier si l'email a été simulé (développement)
-    const isSimulated = emailResult && emailResult.simulated;
-    if (isSimulated && process.env.NODE_ENV === 'development') {
-      // En développement, si l'email est simulé, valider automatiquement l'email
-      user.isEmailVerified = true;
-      await user.save();
-      console.log('Mode développement: email automatiquement vérifié pour', user.email);
-    }
-
-    // Envoyer un code de vérification par SMS si un téléphone est fourni
-    if (phone) {
-      try {
-        const phoneVerificationCode = user.getPhoneVerificationCode();
-        await user.save({ validateBeforeSave: false });
-
-        await sendSMS({
-          to: phone,
-          message: `Bienvenue sur 404.js! Votre code de vérification est: ${phoneVerificationCode}. Il expirera dans 10 minutes.`
-        });
-      } catch (smsError) {
-        console.error('Erreur d\'envoi de SMS:', smsError);
-        // Ne pas bloquer l'inscription si l'envoi de SMS échoue
-      }
-    }
-
-    // Journaliser l'inscription
+    // Journaliser l'action
     await UserLog.create({
       user: user._id,
       action: 'register',
-      description: `${user.email} s'est inscrit`,
-      ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent']
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      description: 'Création de compte utilisateur'
     });
-
-    // Si nous sommes en développement et que l'email est simulé, connecter l'utilisateur directement
-    if (isSimulated && process.env.NODE_ENV === 'development') {
-      return sendTokenResponse(user, 201, res, req);
-    }
-
-    // Sinon, envoyer une réponse avec des informations sur l'inscription
-    res.status(201).json({
-      success: true,
-      message: 'Inscription réussie. Veuillez vérifier votre email pour activer votre compte.',
-      data: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        isEmailVerified: user.isEmailVerified,
-        isPhoneVerified: user.isPhoneVerified,
-        phone: user.phone
-      }
-    });
-  } catch (err) {
-    console.error('Erreur lors de l\'inscription:', err);
     
-    // Nettoyer les données de vérification en cas d'erreur
+    // Créer un token et répondre
+    sendTokenResponse(user, 201, res);
+  } catch (err) {
+    console.error('Erreur lors de l\'envoi de l\'email de vérification:', err);
+    
+    // Réinitialiser le token en cas d'erreur
     user.emailVerificationToken = undefined;
-    user.emailVerificationExpire = undefined;
-    user.phoneVerificationCode = undefined;
-    user.phoneVerificationExpire = undefined;
+    user.emailVerificationExpires = undefined;
     await user.save({ validateBeforeSave: false });
-
-    // Si nous sommes en développement, connecter l'utilisateur malgré l'erreur d'email
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Mode développement: connexion de l\'utilisateur malgré l\'erreur d\'email');
-      user.isEmailVerified = true; // Simuler la vérification
-      await user.save();
-      return sendTokenResponse(user, 201, res, req);
-    }
-
+    
     return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de vérification. Veuillez réessayer.', 500));
   }
 });
 
-// @desc    Connexion d'un utilisateur
-// @route   POST /api/auth/login
-// @access  Public
+/**
+ * @desc    Connexion d'un utilisateur
+ * @route   POST /api/auth/login
+ * @access  Public
+ */
 exports.login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
-
-  // Vérifier si l'email et le mot de passe ont été fournis
+  
+  // Valider l'email et le mot de passe
   if (!email || !password) {
     return next(new ErrorResponse('Veuillez fournir un email et un mot de passe', 400));
   }
-
+  
   // Vérifier si l'utilisateur existe
-  const user = await User.findOne({ email }).select('+password');
-
+  const user = await User.findOne({ email }).select('+password +loginAttempts +isLocked');
+  
   if (!user) {
-    // Incrémenter un compteur global de tentatives échouées (pour limiter les attaques)
-    // Cela pourrait être implémenté avec Redis ou équivalent
-    return next(new ErrorResponse('Identifiants invalides', 401));
-  }
-
-  // Vérifier si le compte est verrouillé
-  if (user.accountLocked) {
-    return next(new ErrorResponse('Votre compte est verrouillé. Veuillez contacter l\'administrateur', 403));
-  }
-
-  // Vérifier si le mot de passe correspond
-  const isMatch = await user.matchPassword(password);
-
-  if (!isMatch) {
-    // Incrémenter le compteur de tentatives de connexion
-    await user.incrementLoginAttempts();
-    
-    // Journaliser la tentative de connexion échouée
+    // Journaliser la tentative échouée
     await UserLog.create({
-      user: user._id,
       action: 'login_failed',
-      description: `Tentative de connexion échouée pour ${user.email}`,
-      ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent']
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      description: 'Tentative de connexion avec un email inexistant',
+      details: { email }
     });
     
     return next(new ErrorResponse('Identifiants invalides', 401));
   }
-
-  // Réinitialiser le compteur de tentatives de connexion
-  await user.resetLoginAttempts();
-
+  
+  // Vérifier si le compte est verrouillé
+  if (user.isLocked) {
+    return next(new ErrorResponse('Votre compte est temporairement verrouillé. Veuillez réessayer plus tard ou contactez le support.', 401));
+  }
+  
+  // Vérifier si le mot de passe correspond
+  const isMatch = await user.correctPassword(password, user.password);
+  
+  if (!isMatch) {
+    // Augmenter le compteur de tentatives échouées
+    user.loginAttempts += 1;
+    
+    // Verrouiller le compte après 5 tentatives
+    if (user.loginAttempts >= 5) {
+      user.isLocked = true;
+      
+      // Journaliser le verrouillage
+      await UserLog.create({
+        user: user._id,
+        action: 'account_locked',
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+        description: 'Compte verrouillé après 5 tentatives de connexion échouées'
+      });
+    }
+    
+    await user.save({ validateBeforeSave: false });
+    
+    // Journaliser la tentative échouée
+    await UserLog.create({
+      user: user._id,
+      action: 'login_failed',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      description: 'Tentative de connexion avec un mot de passe incorrect'
+    });
+    
+    return next(new ErrorResponse('Identifiants invalides', 401));
+  }
+  
+  // Réinitialiser le compteur de tentatives
+  user.loginAttempts = 0;
+  await user.save({ validateBeforeSave: false });
+  
   // Journaliser la connexion réussie
   await UserLog.create({
     user: user._id,
     action: 'login',
-    description: `${user.email} s'est connecté`,
-    ip: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent']
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+    description: 'Connexion réussie'
   });
-
-  sendTokenResponse(user, 200, res, req);
+  
+  // Créer un token et répondre
+  sendTokenResponse(user, 200, res);
 });
 
-// @desc    Déconnexion / effacement du cookie
-// @route   GET /api/auth/logout
-// @access  Public
+/**
+ * @desc    Déconnecter un utilisateur
+ * @route   GET /api/auth/logout
+ * @access  Private
+ */
 exports.logout = asyncHandler(async (req, res, next) => {
-  // Si nous utilisons des sessions
-  if (req.session) {
-    req.session.destroy();
+  // Si l'utilisateur est authentifié, journaliser la déconnexion
+  if (req.user) {
+    await UserLog.create({
+      user: req.user.id,
+      action: 'logout',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      description: 'Déconnexion'
+    });
   }
-
-  // Effacer le cookie
+  
+  // Supprimer le cookie
   res.cookie('token', 'none', {
     expires: new Date(Date.now() + 10 * 1000), // 10 secondes
     httpOnly: true
   });
-
-  // Si un utilisateur est connecté, journaliser la déconnexion
-  if (req.user) {
-    await UserLog.create({
-      user: req.user._id,
-      action: 'logout',
-      description: `${req.user.email} s'est déconnecté`,
-      ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent']
-    });
-  }
-
+  
   res.status(200).json({
     success: true,
     data: {}
   });
 });
 
-// @desc    Obtenir les informations de l'utilisateur actuel
-// @route   GET /api/auth/me
-// @access  Private
+/**
+ * @desc    Obtenir l'utilisateur actuel
+ * @route   GET /api/auth/me
+ * @access  Private
+ */
 exports.getMe = asyncHandler(async (req, res, next) => {
   const user = await User.findById(req.user.id);
-
+  
   res.status(200).json({
     success: true,
     data: user
   });
 });
 
-// @desc    Mot de passe oublié
-// @route   POST /api/auth/forgotpassword
-// @access  Public
-exports.forgotPassword = asyncHandler(async (req, res, next) => {
-  const { email } = req.body;
-
-  if (!email) {
-    return next(new ErrorResponse('Veuillez fournir un email', 400));
-  }
-
-  const user = await User.findOne({ email });
-
-  if (!user) {
-    // Ne pas révéler si l'utilisateur existe ou non pour des raisons de sécurité
-    return res.status(200).json({
-      success: true,
-      message: 'Si un compte existe avec cet email, un email de réinitialisation a été envoyé'
-    });
-  }
-
-  // Générer le token de réinitialisation
-  const resetToken = user.getResetPasswordToken();
-  await user.save({ validateBeforeSave: false });
-
-  // Créer l'URL de réinitialisation
-  const resetUrl = `${req.protocol}://${req.get('host')}/api/auth/resetpassword/${resetToken}`;
-  // Pour le frontend
-  const frontendResetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-
-  const message = `
-    Vous recevez cet email car vous (ou quelqu'un d'autre) avez demandé la réinitialisation du mot de passe.
-    Veuillez cliquer sur le lien suivant pour réinitialiser votre mot de passe :
-    \n\n${frontendResetUrl}\n\n
-    Ce lien expirera dans 10 minutes.
-    Si vous n'avez pas demandé cette réinitialisation, veuillez ignorer cet email.
-  `;
-
-  try {
-    await sendEmail({
-      email: user.email,
-      subject: 'Réinitialisation de votre mot de passe',
-      message,
-      html: `
-        <p>Vous recevez cet email car vous (ou quelqu'un d'autre) avez demandé la réinitialisation du mot de passe.</p>
-        <p>Veuillez cliquer sur le bouton suivant pour réinitialiser votre mot de passe :</p>
-        <p>
-          <a href="${frontendResetUrl}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-            Réinitialiser le mot de passe
-          </a>
-        </p>
-        <p>Ce lien expirera dans 10 minutes.</p>
-        <p>Si vous n'avez pas demandé cette réinitialisation, veuillez ignorer cet email.</p>
-      `
-    });
-
-    // Journaliser la demande de réinitialisation
-    await UserLog.create({
-      user: user._id,
-      action: 'forgot_password',
-      description: `Demande de réinitialisation de mot de passe pour ${user.email}`,
-      ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent']
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Email de réinitialisation envoyé'
-    });
-  } catch (err) {
-    console.error('Erreur d\'envoi d\'email:', err);
-    
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    await user.save({ validateBeforeSave: false });
-
-    return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email. Veuillez réessayer plus tard.', 500));
-  }
-});
-
-// @desc    Réinitialiser le mot de passe
-// @route   PUT /api/auth/resetpassword/:resettoken
-// @access  Public
-exports.resetPassword = asyncHandler(async (req, res, next) => {
-  // Récupérer le token depuis l'URL et le hacher
-  const resetToken = crypto
-    .createHash('sha256')
-    .update(req.params.resettoken)
-    .digest('hex');
-
-  // Trouver l'utilisateur avec le token et vérifier qu'il n'a pas expiré
-  const user = await User.findOne({
-    resetPasswordToken: resetToken,
-    resetPasswordExpire: { $gt: Date.now() }
-  });
-
-  if (!user) {
-    return next(new ErrorResponse('Token invalide ou expiré', 400));
-  }
-
-  // Définir le nouveau mot de passe
-  user.password = req.body.password;
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpire = undefined;
+/**
+ * @desc    Mettre à jour les informations de l'utilisateur
+ * @route   PUT /api/auth/updatedetails
+ * @access  Private
+ */
+exports.updateDetails = asyncHandler(async (req, res, next) => {
+  // Champs autorisés à mettre à jour
+  const fieldsToUpdate = {
+    name: req.body.name,
+    email: req.body.email,
+    phone: req.body.phone,
+    address: req.body.address
+  };
   
-  await user.save();
-
-  // Journaliser la réinitialisation
-  await UserLog.create({
-    user: user._id,
-    action: 'reset_password',
-    description: `Réinitialisation de mot de passe pour ${user.email}`,
-    ip: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent']
+  // Supprimer les champs non fournis
+  Object.keys(fieldsToUpdate).forEach(key => {
+    if (fieldsToUpdate[key] === undefined) {
+      delete fieldsToUpdate[key];
+    }
   });
-
-  // Connecter l'utilisateur et renvoyer un token
-  sendTokenResponse(user, 200, res, req);
-});
-
-// @desc    Mettre à jour le mot de passe
-// @route   PUT /api/auth/updatepassword
-// @access  Private
-exports.updatePassword = asyncHandler(async (req, res, next) => {
-  // Récupérer l'utilisateur avec le mot de passe
-  const user = await User.findById(req.user.id).select('+password');
-
-  // Vérifier le mot de passe actuel
-  const isMatch = await user.matchPassword(req.body.currentPassword);
-
-  if (!isMatch) {
-    return next(new ErrorResponse('Mot de passe actuel incorrect', 401));
-  }
-
-  // Définir le nouveau mot de passe
-  user.password = req.body.newPassword;
-  await user.save();
-
-  // Journaliser la mise à jour
-  await UserLog.create({
-    user: user._id,
-    action: 'update_password',
-    description: `Mise à jour du mot de passe pour ${user.email}`,
-    ip: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent']
-  });
-
-  // Connecter l'utilisateur et renvoyer un token
-  sendTokenResponse(user, 200, res, req);
-});
-
-// @desc    Mettre à jour les informations du profil
-// @route   PUT /api/auth/updateprofile
-// @access  Private
-exports.updateProfile = asyncHandler(async (req, res, next) => {
-  // Récupérer l'utilisateur
+  
+  // Si l'email est modifié, réinitialiser la vérification
   const user = await User.findById(req.user.id);
-
-  // Données à mettre à jour
-  const fieldsToUpdate = {};
-
-  // Mise à jour du nom
-  if (req.body.name) {
-    fieldsToUpdate.name = req.body.name;
+  
+  if (fieldsToUpdate.email && fieldsToUpdate.email !== user.email) {
+    fieldsToUpdate.isEmailVerified = false;
   }
-
-  // Mise à jour de l'email (nécessite une vérification)
-  if (req.body.email && req.body.email !== user.email) {
-    // Vérifier si l'email est déjà utilisé
-    const emailExists = await User.findOne({ email: req.body.email });
-    
-    if (emailExists) {
-      return next(new ErrorResponse('Cet email est déjà utilisé', 400));
-    }
-    
-    // Stocker temporairement le nouvel email
-    user._newEmail = req.body.email;
-    
-    // Générer un token de vérification
-    const emailVerificationToken = user.getEmailVerificationToken();
-    await user.save({ validateBeforeSave: false });
-
-    // Créer l'URL de vérification
-    const verifyEmailUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${emailVerificationToken}`;
-    const frontendVerifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerificationToken}`;
-
-    const message = `
-      Veuillez cliquer sur le lien suivant pour vérifier votre nouvelle adresse email:
-      \n\n${frontendVerifyUrl}\n\n
-      Ce lien expirera dans 24 heures.
-    `;
-
-    try {
-      await sendEmail({
-        email: req.body.email, // Envoyer à la nouvelle adresse
-        subject: 'Vérification de votre nouvelle adresse email',
-        message,
-        html: `
-          <p>Veuillez cliquer sur le bouton suivant pour vérifier votre nouvelle adresse email:</p>
-          <p>
-            <a href="${frontendVerifyUrl}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-              Vérifier mon email
-            </a>
-          </p>
-          <p>Ce lien expirera dans 24 heures.</p>
-        `
-      });
-    } catch (error) {
-      console.error('Erreur d\'envoi d\'email:', error);
-      
-      user._newEmail = undefined;
-      user.emailVerificationToken = undefined;
-      user.emailVerificationExpire = undefined;
-      await user.save({ validateBeforeSave: false });
-
-      return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de vérification', 500));
-    }
+  
+  // Si le téléphone est modifié, réinitialiser la vérification
+  if (fieldsToUpdate.phone && fieldsToUpdate.phone !== user.phone) {
+    fieldsToUpdate.isPhoneVerified = false;
   }
-
-  // Mise à jour du téléphone (nécessite une vérification)
-  if (req.body.phone && req.body.phone !== user.phone) {
-    // Vérifier si le téléphone est déjà utilisé
-    const phoneExists = await User.findOne({ phone: req.body.phone });
-    
-    if (phoneExists) {
-      return next(new ErrorResponse('Ce numéro de téléphone est déjà utilisé', 400));
-    }
-    
-    // Stocker temporairement le nouveau téléphone
-    user._newPhone = req.body.phone;
-    
-    // Générer un code de vérification
-    const phoneVerificationCode = user.getPhoneVerificationCode();
-    await user.save({ validateBeforeSave: false });
-
-    // Envoyer le code par SMS
-    try {
-      await sendSMS({
-        to: req.body.phone,
-        message: `Votre code de vérification pour 404.js est: ${phoneVerificationCode}. Il expirera dans 10 minutes.`
-      });
-    } catch (error) {
-      console.error('Erreur d\'envoi de SMS:', error);
-      
-      user._newPhone = undefined;
-      user.phoneVerificationCode = undefined;
-      user.phoneVerificationExpire = undefined;
-      await user.save({ validateBeforeSave: false });
-
-      return next(new ErrorResponse('Erreur lors de l\'envoi du SMS de vérification', 500));
-    }
-  }
-
-  // Mettre à jour les champs qui ne nécessitent pas de vérification
+  
+  // Mettre à jour l'utilisateur
   const updatedUser = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
     new: true,
     runValidators: true
   });
-
-  // Journaliser la mise à jour
+  
+  // Journaliser l'action
   await UserLog.create({
-    user: user._id,
+    user: req.user.id,
     action: 'update_profile',
-    description: `Mise à jour du profil pour ${user.email}`,
-    ip: req.ip || req.connection.remoteAddress,
+    ip: req.ip,
     userAgent: req.headers['user-agent'],
-    details: { updatedFields: Object.keys(fieldsToUpdate) }
+    description: 'Mise à jour des informations du profil'
   });
-
+  
   res.status(200).json({
     success: true,
-    data: updatedUser,
-    message: req.body.email !== user.email || req.body.phone !== user.phone 
-      ? 'Profil mis à jour. Veuillez vérifier votre email ou téléphone pour confirmer les modifications.'
-      : 'Profil mis à jour avec succès.'
+    data: updatedUser
   });
 });
 
-// @desc    Vérifier l'email d'un utilisateur
-// @route   GET /api/auth/verifyemail/:token
-// @access  Public
+/**
+ * @desc    Mettre à jour le mot de passe
+ * @route   PUT /api/auth/updatepassword
+ * @access  Private
+ */
+exports.updatePassword = asyncHandler(async (req, res, next) => {
+  const { currentPassword, newPassword, newPasswordConfirm } = req.body;
+  
+  // Vérifier si tous les champs sont fournis
+  if (!currentPassword || !newPassword || !newPasswordConfirm) {
+    return next(new ErrorResponse('Veuillez fournir tous les champs requis', 400));
+  }
+  
+  // Vérifier si les nouveaux mots de passe correspondent
+  if (newPassword !== newPasswordConfirm) {
+    return next(new ErrorResponse('Les nouveaux mots de passe ne correspondent pas', 400));
+  }
+  
+  // Récupérer l'utilisateur avec le mot de passe
+  const user = await User.findById(req.user.id).select('+password');
+  
+  // Vérifier si le mot de passe actuel est correct
+  const isMatch = await user.correctPassword(currentPassword, user.password);
+  
+  if (!isMatch) {
+    return next(new ErrorResponse('Mot de passe actuel incorrect', 401));
+  }
+  
+  // Mettre à jour le mot de passe
+  user.password = newPassword;
+  user.passwordConfirm = newPasswordConfirm;
+  await user.save();
+  
+  // Journaliser l'action
+  await UserLog.create({
+    user: req.user.id,
+    action: 'update_password',
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+    description: 'Mise à jour du mot de passe'
+  });
+  
+  // Créer un nouveau token et répondre
+  sendTokenResponse(user, 200, res);
+});
+
+/**
+ * @desc    Mot de passe oublié
+ * @route   POST /api/auth/forgotpassword
+ * @access  Public
+ */
+exports.forgotPassword = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+  
+  // Vérifier si l'email est fourni
+  if (!email) {
+    return next(new ErrorResponse('Veuillez fournir une adresse email', 400));
+  }
+  
+  // Rechercher l'utilisateur
+  const user = await User.findOne({ email });
+  
+  if (!user) {
+    return next(new ErrorResponse('Aucun utilisateur trouvé avec cette adresse email', 404));
+  }
+  
+  // Générer un token de réinitialisation
+  const resetToken = user.createPasswordResetToken();
+  await user.save({ validateBeforeSave: false });
+  
+  // URL de réinitialisation
+  const resetURL = `${req.protocol}://${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+  
+  const message = `
+    Vous recevez cet email car vous avez demandé la réinitialisation de votre mot de passe.
+    Veuillez cliquer sur le lien suivant pour réinitialiser votre mot de passe:
+    ${resetURL}
+    Ce lien expirera dans 10 minutes.
+  `;
+  
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: 'Réinitialisation de votre mot de passe',
+      message
+    });
+    
+    // Journaliser l'action
+    await UserLog.create({
+      user: user._id,
+      action: 'reset_password',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      description: 'Demande de réinitialisation de mot de passe'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Email envoyé'
+    });
+  } catch (err) {
+    console.error('Erreur lors de l\'envoi de l\'email de réinitialisation:', err);
+    
+    // Réinitialiser le token en cas d'erreur
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+    
+    return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de réinitialisation. Veuillez réessayer.', 500));
+  }
+});
+
+/**
+ * @desc    Réinitialiser le mot de passe
+ * @route   PUT /api/auth/resetpassword/:resettoken
+ * @access  Public
+ */
+exports.resetPassword = asyncHandler(async (req, res, next) => {
+  // Hacher le token
+  const resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(req.params.resettoken)
+    .digest('hex');
+  
+  // Rechercher l'utilisateur avec le token
+  const user = await User.findOne({
+    passwordResetToken: resetPasswordToken,
+    passwordResetExpires: { $gt: Date.now() }
+  });
+  
+  if (!user) {
+    return next(new ErrorResponse('Token invalide ou expiré', 400));
+  }
+  
+  // Définir le nouveau mot de passe
+  user.password = req.body.password;
+  user.passwordConfirm = req.body.passwordConfirm;
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save();
+  
+  // Journaliser l'action
+  await UserLog.create({
+    user: user._id,
+    action: 'reset_password',
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+    description: 'Réinitialisation de mot de passe réussie'
+  });
+  
+  // Créer un token et répondre
+  sendTokenResponse(user, 200, res);
+});
+
+/**
+ * @desc    Vérifier l'adresse email
+ * @route   GET /api/auth/verify-email/:token
+ * @access  Public
+ */
 exports.verifyEmail = asyncHandler(async (req, res, next) => {
-  // Récupérer le token depuis l'URL et le hacher
+  // Hacher le token
   const emailVerificationToken = crypto
     .createHash('sha256')
     .update(req.params.token)
     .digest('hex');
-
-  // Trouver l'utilisateur avec le token et vérifier qu'il n'a pas expiré
+  
+  // Rechercher l'utilisateur avec le token
   const user = await User.findOne({
     emailVerificationToken,
-    emailVerificationExpire: { $gt: Date.now() }
+    emailVerificationExpires: { $gt: Date.now() }
   });
-
+  
   if (!user) {
-    return next(new ErrorResponse('Token de vérification invalide ou expiré', 400));
+    return next(new ErrorResponse('Token invalide ou expiré', 400));
   }
-
-  // Mettre à jour le statut de vérification
+  
+  // Marquer l'email comme vérifié
   user.isEmailVerified = true;
   user.emailVerificationToken = undefined;
-  user.emailVerificationExpire = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save({ validateBeforeSave: false });
   
-  // Si un nouvel email est en attente, le mettre à jour
-  if (user._newEmail) {
-    user.email = user._newEmail;
-    user._newEmail = undefined;
-  }
-  
-  await user.save();
-
-  // Journaliser la vérification
+  // Journaliser l'action
   await UserLog.create({
     user: user._id,
     action: 'verify_email',
-    description: `Email vérifié pour ${user.email}`,
-    ip: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent']
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+    description: 'Vérification d\'email réussie'
   });
-
-  // Rediriger vers le frontend avec un message de succès
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  res.redirect(`${frontendUrl}/email-verified?success=true`);
-});
-
-// @desc    Vérifier le téléphone d'un utilisateur
-// @route   POST /api/auth/verifyphone
-// @access  Private
-exports.verifyPhone = asyncHandler(async (req, res, next) => {
-  const { verificationCode } = req.body;
-
-  // Récupérer l'utilisateur
-  const user = await User.findById(req.user.id);
-
-  // Vérifier si l'utilisateur a un code de vérification en attente
-  if (!user.phoneVerificationCode || !user.phoneVerificationExpire) {
-    return next(new ErrorResponse('Aucun code de vérification en attente', 400));
-  }
-
-  // Vérifier si le code a expiré
-  if (user.phoneVerificationExpire < Date.now()) {
-    // Nettoyer les données de vérification
-    user.phoneVerificationCode = undefined;
-    user.phoneVerificationExpire = undefined;
-    await user.save({ validateBeforeSave: false });
-    
-    return next(new ErrorResponse('Le code de vérification a expiré', 400));
-  }
-
-  // Vérifier si le code correspond
-  if (user.phoneVerificationCode !== verificationCode) {
-    return next(new ErrorResponse('Code de vérification invalide', 400));
-  }
-
-  // Si un nouveau téléphone est en attente, le mettre à jour
-  if (user._newPhone) {
-    user.phone = user._newPhone;
-    user._newPhone = undefined;
-  }
-
-  // Mettre à jour le statut de vérification
-  user.isPhoneVerified = true;
-  user.phoneVerificationCode = undefined;
-  user.phoneVerificationExpire = undefined;
   
-  await user.save();
-
-  // Journaliser la vérification
-  await UserLog.create({
-    user: user._id,
-    action: 'verify_phone',
-    description: `Téléphone vérifié pour ${user.email}`,
-    ip: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent']
-  });
-
   res.status(200).json({
     success: true,
-    message: 'Téléphone vérifié avec succès',
-    data: {
-      phone: user.phone,
-      isPhoneVerified: user.isPhoneVerified
-    }
+    message: 'Email vérifié avec succès'
   });
 });
 
-
-
-// @desc    Renvoyer l'email de vérification
-// @route   POST /api/auth/resendverificationemail
-// @access  Private
+/**
+ * @desc    Renvoyer l'email de vérification
+ * @route   POST /api/auth/resend-verification-email
+ * @access  Private
+ */
 exports.resendVerificationEmail = asyncHandler(async (req, res, next) => {
-  // Récupérer l'utilisateur
   const user = await User.findById(req.user.id);
-
-  // Vérifier si l'email est déjà vérifié
-  if (user.isEmailVerified && !user._newEmail) {
+  
+  if (user.isEmailVerified) {
     return next(new ErrorResponse('Votre email est déjà vérifié', 400));
   }
-
-  // Générer un nouveau token de vérification
-  const emailVerificationToken = user.getEmailVerificationToken();
+  
+  // Générer un nouveau token
+  const verificationToken = user.createEmailVerificationToken();
   await user.save({ validateBeforeSave: false });
-
-  // Créer l'URL de vérification
-  const verifyEmailUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${emailVerificationToken}`;
-  const frontendVerifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailVerificationToken}`;
-
-  // Déterminer l'email auquel envoyer la vérification
-  const targetEmail = user._newEmail || user.email;
-
+  
+  // URL de vérification
+  const verificationURL = `${req.protocol}://${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+  
   const message = `
     Veuillez cliquer sur le lien suivant pour vérifier votre adresse email:
-    \n\n${frontendVerifyUrl}\n\n
-    Ce lien expirera dans 24 heures.
+    ${verificationURL}
   `;
-
+  
   try {
     await sendEmail({
-      email: targetEmail,
+      email: user.email,
       subject: 'Vérification de votre adresse email',
-      message,
-      html: `
-        <p>Veuillez cliquer sur le bouton suivant pour vérifier votre adresse email:</p>
-        <p>
-          <a href="${frontendVerifyUrl}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-            Vérifier mon email
-          </a>
-        </p>
-        <p>Ce lien expirera dans 24 heures.</p>
-      `
+      message
     });
-
-    // Journaliser l'envoi
+    
+    // Journaliser l'action
     await UserLog.create({
       user: user._id,
       action: 'resend_verification_email',
-      description: `Nouvel email de vérification envoyé à ${targetEmail}`,
-      ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent']
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      description: 'Renvoi d\'email de vérification'
     });
-
+    
     res.status(200).json({
       success: true,
-      message: `Email de vérification envoyé à ${targetEmail}`
+      message: 'Email de vérification renvoyé'
     });
   } catch (err) {
-    console.error('Erreur d\'envoi d\'email:', err);
+    console.error('Erreur lors de l\'envoi de l\'email de vérification:', err);
     
+    // Réinitialiser le token en cas d'erreur
     user.emailVerificationToken = undefined;
-    user.emailVerificationExpire = undefined;
+    user.emailVerificationExpires = undefined;
     await user.save({ validateBeforeSave: false });
-
-    return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de vérification', 500));
-  }
-});
-
-// @desc    Renvoyer le SMS de vérification
-// @route   POST /api/auth/resendverificationsms
-// @access  Private
-exports.resendVerificationSMS = asyncHandler(async (req, res, next) => {
-  // Récupérer l'utilisateur
-  const user = await User.findById(req.user.id);
-
-  // Vérifier si le téléphone est déjà vérifié
-  if (user.isPhoneVerified && !user._newPhone) {
-    return next(new ErrorResponse('Votre téléphone est déjà vérifié', 400));
-  }
-// Vérifier si un téléphone est défini
-  const targetPhone = user._newPhone || user.phone;
-  if (!targetPhone) {
-    return next(new ErrorResponse('Aucun numéro de téléphone défini', 400));
-  }
-
-  // Générer un nouveau code de vérification
-  const phoneVerificationCode = user.getPhoneVerificationCode();
-  await user.save({ validateBeforeSave: false });
-
-  try {
-    await sendSMS({
-      to: targetPhone,
-      message: `Votre code de vérification pour 404.js est: ${phoneVerificationCode}. Il expirera dans 10 minutes.`
-    });
-
-    // Journaliser l'envoi
-    await UserLog.create({
-      user: user._id,
-      action: 'resend_verification_sms',
-      description: `Nouveau SMS de vérification envoyé à ${targetPhone}`,
-      ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent']
-    });
-
-    res.status(200).json({
-      success: true,
-      message: `SMS de vérification envoyé à ${targetPhone}`
-    });
-  } catch (error) {
-    console.error('Erreur d\'envoi de SMS:', error);
     
+    return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de vérification. Veuillez réessayer.', 500));
+  }
+});
+
+/**
+ * @desc    Vérifier le numéro de téléphone
+ * @route   POST /api/auth/verifyphone
+ * @access  Private
+ */
+exports.verifyPhone = async (req, res, next) => {
+  try {
+    const { verificationCode } = req.body;
+    
+    if (!verificationCode) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Veuillez fournir un code de vérification'
+      });
+    }
+    
+    const user = await User.findById(req.user.id);
+    
+    if (!user.phone) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Aucun numéro de téléphone à vérifier'
+      });
+    }
+    
+    if (user.isPhoneVerified) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Votre numéro de téléphone est déjà vérifié'
+      });
+    }
+    
+    // Vérifier le code
+    if (!user.phoneVerificationCode || user.phoneVerificationCode !== verificationCode) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Code de vérification invalide'
+      });
+    }
+    
+    // Vérifier si le code n'a pas expiré
+    if (user.phoneVerificationExpires < Date.now()) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Code de vérification expiré'
+      });
+    }
+    
+    // Marquer le téléphone comme vérifié
+    user.isPhoneVerified = true;
     user.phoneVerificationCode = undefined;
-    user.phoneVerificationExpire = undefined;
+    user.phoneVerificationExpires = undefined;
     await user.save({ validateBeforeSave: false });
-
-    return next(new ErrorResponse('Erreur lors de l\'envoi du SMS de vérification', 500));
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Numéro de téléphone vérifié avec succès'
+    });
+  } catch (err) {
+    console.error('Erreur lors de la vérification du numéro de téléphone:', err);
+    res.status(500).json({
+      status: 'error',
+      error: 'Une erreur est survenue lors de la vérification du numéro de téléphone.'
+    });
   }
-});
+};
 
-// @desc    Vérifier le nouveau email
-// @route   GET /api/auth/verifynewemail/:token
-// @access  Public
-exports.verifyNewEmail = asyncHandler(async (req, res, next) => {
-  // Récupérer le token depuis l'URL et le hacher
-  const emailVerificationToken = crypto
-    .createHash('sha256')
-    .update(req.params.token)
-    .digest('hex');
+/**
+ * @desc    Renvoyer le SMS de vérification
+ * @route   POST /api/auth/resendverificationsms
+ * @access  Private
+ */
+exports.resendVerificationSMS = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user.phone) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Aucun numéro de téléphone à vérifier'
+      });
+    }
+    
+    if (user.isPhoneVerified) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Votre numéro de téléphone est déjà vérifié'
+      });
+    }
+    
+    // Générer un nouveau code de vérification
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // Code à 6 chiffres
+    
+    // Sauvegarder le code et définir une expiration (10 minutes)
+    user.phoneVerificationCode = verificationCode;
+    user.phoneVerificationExpires = Date.now() + 10 * 60 * 1000;
+    await user.save({ validateBeforeSave: false });
+    
+    // TODO: Intégrer un service d'envoi de SMS (Twilio, Nexmo, etc.)
+    // Pour l'instant, simuler l'envoi du SMS et retourner le code dans la réponse pour le développement
+    console.log(`Code de vérification pour ${user.phone}: ${verificationCode}`);
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Code de vérification envoyé avec succès',
+      // En développement seulement, ne pas inclure en production
+      code: process.env.NODE_ENV === 'development' ? verificationCode : undefined
+    });
+  } catch (err) {
+    console.error('Erreur lors de l\'envoi du SMS de vérification:', err);
+    res.status(500).json({
+      status: 'error',
+      error: 'Une erreur est survenue lors de l\'envoi du SMS de vérification.'
+    });
+  }
+};
 
-  // Trouver l'utilisateur avec le token et vérifier qu'il n'a pas expiré
-  const user = await User.findOne({
-    emailVerificationToken,
-    emailVerificationExpire: { $gt: Date.now() }
+/**
+ * @desc    Vérifier la disponibilité d'un email
+ * @route   POST /api/auth/check-email
+ * @access  Public
+ */
+exports.checkEmailAvailability = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        status: 'fail',
+        error: 'Veuillez fournir une adresse email'
+      });
+    }
+    
+    const existingUser = await User.findOne({ email });
+    
+    res.status(200).json({
+      status: 'success',
+      available: !existingUser
+    });
+  } catch (err) {
+    console.error('Erreur lors de la vérification de la disponibilité de l\'email:', err);
+    res.status(500).json({
+      status: 'error',
+      error: 'Une erreur est survenue lors de la vérification de la disponibilité de l\'email.'
+    });
+  }
+};
+
+/**
+ * @desc    Point d'entrée pour vérifier l'état du serveur
+ * @route   GET /api/health
+ * @access  Public
+ */
+exports.healthCheck = (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Le serveur fonctionne correctement',
+    timestamp: new Date().toISOString()
   });
+};
 
-  if (!user) {
-    return next(new ErrorResponse('Token de vérification invalide ou expiré', 400));
-  }
-
-  // Vérifier si un nouvel email est en attente
-  if (!user._newEmail) {
-    return next(new ErrorResponse('Aucun nouvel email en attente de vérification', 400));
-  }
-
-  // Mettre à jour l'email
-  user.email = user._newEmail;
-  user._newEmail = undefined;
-  user.isEmailVerified = true;
-  user.emailVerificationToken = undefined;
-  user.emailVerificationExpire = undefined;
+/**
+ * @desc    Créer un token, le stocker dans un cookie et envoyer la réponse
+ * @param   {Object} user - Utilisateur pour lequel créer le token
+ * @param   {number} statusCode - Code HTTP à retourner
+ * @param   {Object} res - Objet réponse Express
+ */
+const sendTokenResponse = (user, statusCode, res) => {
+  // Créer un token
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE
+  });
   
-  await user.save();
-
-  // Journaliser la vérification
-  await UserLog.create({
-    user: user._id,
-    action: 'verify_new_email',
-    description: `Nouvel email vérifié: ${user.email}`,
-    ip: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent']
-  });
-
-  // Rediriger vers le frontend avec un message de succès
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  res.redirect(`${frontendUrl}/email-verified?success=true`);
-});
-
-// Fonction helper pour envoyer le token de réponse
-const sendTokenResponse = (user, statusCode, res, req) => {
-  // Créer token JWT
-  const token = user.getSignedJwtToken();
-
   // Options du cookie
-  const options = {
-    expires: new Date(
-      Date.now() + parseInt(process.env.JWT_COOKIE_EXPIRE || 30) * 24 * 60 * 60 * 1000
-    ),
+  const cookieOptions = {
+    expires: new Date(Date.now() + parseInt(process.env.JWT_COOKIE_EXPIRE || 30) * 24 * 60 * 60 * 1000),
     httpOnly: true
   };
-
-  // Sécuriser les cookies en production
+  
+  // Secure en production
   if (process.env.NODE_ENV === 'production') {
-    options.secure = true;
+    cookieOptions.secure = true;
   }
-
-  // Créer la session si activée
-  const useSession = process.env.USE_SESSION === 'true';
-  if (useSession && req.session) {
-    req.session.userId = user._id;
-  }
-
+  
+  // Envoyer le cookie
   res
     .status(statusCode)
-    .cookie('token', token, options)
+    .cookie('token', token, cookieOptions)
     .json({
       success: true,
       token,
@@ -916,8 +699,9 @@ const sendTokenResponse = (user, statusCode, res, req) => {
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
-        isPhoneVerified: user.isPhoneVerified,
-        phone: user.phone
+        isPhoneVerified: user.isPhoneVerified
       }
     });
 };
+
+module.exports = exports;

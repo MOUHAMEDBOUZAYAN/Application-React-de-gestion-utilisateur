@@ -1,7 +1,8 @@
 // src/store/authStore.jsx
 import { create } from 'zustand';
 import toast from 'react-hot-toast';
-import axios from '../config/axiosConfig'; // Import depuis le fichier de configuration
+import axios from '../config/axiosConfig';
+import { checkServerStatus } from '../utils/authUtils';
 
 export const useAuthStore = create((set, get) => ({
   user: null,
@@ -9,6 +10,14 @@ export const useAuthStore = create((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  serverAvailable: true, // Nouvel état pour suivre la disponibilité du serveur
+
+  // Vérifier la disponibilité du serveur
+  checkServerAvailability: async () => {
+    const isAvailable = await checkServerStatus();
+    set({ serverAvailable: isAvailable });
+    return isAvailable;
+  },
 
   // Vérifier l'authentification à partir du token
   checkAuth: async () => {
@@ -19,6 +28,17 @@ export const useAuthStore = create((set, get) => ({
     }
 
     set({ isLoading: true });
+    
+    // Vérifier d'abord si le serveur est disponible
+    const isServerAvailable = await get().checkServerAvailability();
+    if (!isServerAvailable) {
+      set({ 
+        isLoading: false, 
+        error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+      });
+      return false;
+    }
+    
     try {
       // Récupérer les informations de l'utilisateur
       const response = await axios.get('/auth/me');
@@ -47,11 +67,25 @@ export const useAuthStore = create((set, get) => ({
         user: parsedUserData, 
         isAuthenticated: true, 
         isLoading: false,
-        error: null 
+        error: null,
+        serverAvailable: true
       });
       return true;
     } catch (error) {
       console.error('Erreur lors de la vérification de l\'authentification:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ 
+          serverAvailable: false,
+          user: null, 
+          token: null, 
+          isAuthenticated: false, 
+          isLoading: false,
+          error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+        });
+        return false;
+      }
       
       // Si l'erreur est 401 Unauthorized, nettoyer le localStorage
       if (error.response && error.response.status === 401) {
@@ -78,12 +112,26 @@ export const useAuthStore = create((set, get) => ({
   // Vérification de disponibilité d'email
   checkEmailAvailability: async (email) => {
     try {
+      // Vérifier d'abord si le serveur est disponible
+      const isServerAvailable = await get().checkServerAvailability();
+      if (!isServerAvailable) {
+        toast.error('Impossible de se connecter au serveur pour vérifier l\'email.');
+        return false;
+      }
+      
       set({ isLoading: true });
       const response = await axios.post('/auth/check-email', { email });
       set({ isLoading: false });
       return response.data.available; // true si l'email est disponible
     } catch (error) {
       console.error('Erreur lors de la vérification d\'email:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ serverAvailable: false });
+        toast.error('Impossible de se connecter au serveur pour vérifier l\'email.');
+      }
+      
       set({ isLoading: false });
       return false; // Supposons que l'email n'est pas disponible en cas d'erreur
     }
@@ -91,6 +139,17 @@ export const useAuthStore = create((set, get) => ({
 
   // Inscription
   register: async (userData) => {
+    // Vérifier d'abord si le serveur est disponible
+    const isServerAvailable = await get().checkServerAvailability();
+    if (!isServerAvailable) {
+      set({ 
+        isLoading: false, 
+        error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+      });
+      toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      return false;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       // S'assurer que le rôle est bien transmis
@@ -111,7 +170,8 @@ export const useAuthStore = create((set, get) => ({
           user: response.data.user,
           isAuthenticated: true, 
           isLoading: false,
-          error: null 
+          error: null,
+          serverAvailable: true
         });
         
         toast.success('Inscription réussie! Bienvenue!');
@@ -126,7 +186,7 @@ export const useAuthStore = create((set, get) => ({
         return true;
       } else {
         // Pas de token automatique, une vérification est requise
-        set({ isLoading: false });
+        set({ isLoading: false, serverAvailable: true });
         toast.success(response.data.message || 'Inscription réussie! Veuillez vérifier votre email.');
         
         // Conserver l'email pour future connexion
@@ -137,6 +197,18 @@ export const useAuthStore = create((set, get) => ({
       }
     } catch (error) {
       console.error('Erreur lors de l\'inscription:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ 
+          isLoading: false, 
+          error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.',
+          serverAvailable: false
+        });
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+        return false;
+      }
+      
       let errorMessage = error.response?.data?.error || 'Erreur lors de l\'inscription. Veuillez réessayer.';
       
       // Si c'est une erreur d'email déjà utilisé, on la met en forme spéciale
@@ -152,6 +224,17 @@ export const useAuthStore = create((set, get) => ({
 
   // Connexion
   login: async (credentials) => {
+    // Vérifier d'abord si le serveur est disponible
+    const isServerAvailable = await get().checkServerAvailability();
+    if (!isServerAvailable) {
+      set({ 
+        isLoading: false, 
+        error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+      });
+      toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      return false;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       const response = await axios.post('/auth/login', credentials);
@@ -167,13 +250,26 @@ export const useAuthStore = create((set, get) => ({
         user,
         isAuthenticated: true, 
         isLoading: false,
-        error: null 
+        error: null,
+        serverAvailable: true
       });
       
       toast.success('Connexion réussie!');
       return true;
     } catch (error) {
       console.error('Erreur lors de la connexion:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ 
+          isLoading: false, 
+          error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.',
+          serverAvailable: false
+        });
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+        return false;
+      }
+      
       const errorMessage = error.response?.data?.error || 'Identifiants invalides. Veuillez réessayer.';
       set({ isLoading: false, error: errorMessage });
       toast.error(errorMessage);
@@ -210,6 +306,17 @@ export const useAuthStore = create((set, get) => ({
 
   // Demande de réinitialisation de mot de passe
   forgotPassword: async (email) => {
+    // Vérifier d'abord si le serveur est disponible
+    const isServerAvailable = await get().checkServerAvailability();
+    if (!isServerAvailable) {
+      set({ 
+        isLoading: false, 
+        error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+      });
+      toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      return false;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       await axios.post('/auth/forgotpassword', { email });
@@ -218,6 +325,18 @@ export const useAuthStore = create((set, get) => ({
       return true;
     } catch (error) {
       console.error('Erreur lors de la demande de réinitialisation:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ 
+          isLoading: false, 
+          error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.',
+          serverAvailable: false
+        });
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+        return false;
+      }
+      
       const errorMessage = error.response?.data?.error || 'Erreur lors de la demande de réinitialisation. Veuillez réessayer.';
       set({ isLoading: false, error: errorMessage });
       toast.error(errorMessage);
@@ -227,6 +346,17 @@ export const useAuthStore = create((set, get) => ({
 
   // Réinitialisation de mot de passe
   resetPassword: async (token, password) => {
+    // Vérifier d'abord si le serveur est disponible
+    const isServerAvailable = await get().checkServerAvailability();
+    if (!isServerAvailable) {
+      set({ 
+        isLoading: false, 
+        error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+      });
+      toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      return false;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       await axios.put(`/auth/resetpassword/${token}`, { password });
@@ -235,6 +365,18 @@ export const useAuthStore = create((set, get) => ({
       return true;
     } catch (error) {
       console.error('Erreur lors de la réinitialisation du mot de passe:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ 
+          isLoading: false, 
+          error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.',
+          serverAvailable: false
+        });
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+        return false;
+      }
+      
       const errorMessage = error.response?.data?.error || 'Erreur lors de la réinitialisation du mot de passe. Veuillez réessayer.';
       set({ isLoading: false, error: errorMessage });
       toast.error(errorMessage);
@@ -244,6 +386,17 @@ export const useAuthStore = create((set, get) => ({
 
   // Mise à jour du profil
   updateProfile: async (userData) => {
+    // Vérifier d'abord si le serveur est disponible
+    const isServerAvailable = await get().checkServerAvailability();
+    if (!isServerAvailable) {
+      set({ 
+        isLoading: false, 
+        error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+      });
+      toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      return false;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       const response = await axios.put('/auth/updateprofile', userData);
@@ -257,6 +410,18 @@ export const useAuthStore = create((set, get) => ({
       return true;
     } catch (error) {
       console.error('Erreur lors de la mise à jour du profil:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ 
+          isLoading: false, 
+          error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.',
+          serverAvailable: false
+        });
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+        return false;
+      }
+      
       const errorMessage = error.response?.data?.error || 'Erreur lors de la mise à jour du profil. Veuillez réessayer.';
       set({ isLoading: false, error: errorMessage });
       toast.error(errorMessage);
@@ -266,6 +431,17 @@ export const useAuthStore = create((set, get) => ({
 
   // Mise à jour du mot de passe
   updatePassword: async (passwordData) => {
+    // Vérifier d'abord si le serveur est disponible
+    const isServerAvailable = await get().checkServerAvailability();
+    if (!isServerAvailable) {
+      set({ 
+        isLoading: false, 
+        error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.'
+      });
+      toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      return false;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       // Vérifier que tous les champs requis sont présents
@@ -298,6 +474,18 @@ export const useAuthStore = create((set, get) => ({
       return true;
     } catch (error) {
       console.error('Erreur lors de la mise à jour du mot de passe:', error);
+      
+      // Vérifier si l'erreur est due à une indisponibilité du serveur
+      if (error.message && error.message.includes('Network Error')) {
+        set({ 
+          isLoading: false, 
+          error: 'Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.',
+          serverAvailable: false
+        });
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+        return false;
+      }
+      
       const errorMessage = error.response?.data?.error || 'Erreur lors de la mise à jour du mot de passe. Veuillez réessayer.';
       set({ isLoading: false, error: errorMessage });
       toast.error(errorMessage);

@@ -19,6 +19,23 @@ export const authService = {
     }
   },
 
+
+  // Renvoyer l'email de vérification - MODIFIÉ pour gérer le cas sans authentification
+resendVerificationEmail: async (email) => {
+  try {
+    // La route doit être adaptée à votre backend - soit elle accepte un email, soit elle utilise le token
+    let response;
+    
+    // Utiliser directement la route publique avec l'email fourni
+    response = await axios.post('/auth/public/resendverification', { email });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);
+    throw error;
+  }
+},
+
   // Vérifier la disponibilité d'un email
   checkEmailAvailability: async (email) => {
     try {
@@ -345,6 +362,7 @@ export const adminService = {
     }
   }
 };
+
 
 export default {
   auth: authService,

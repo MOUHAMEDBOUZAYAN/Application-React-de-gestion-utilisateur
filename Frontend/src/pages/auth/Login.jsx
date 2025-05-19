@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { motion } from 'framer-motion'
+import { checkServerStatus } from '../../utils/authUtils'
+import toast from 'react-hot-toast'
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -10,13 +12,32 @@ const Login = () => {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [emailFromRegister, setEmailFromRegister] = useState(false) // Pour indiquer si l'email vient de la page d'inscription
+  const [isServerAvailable, setIsServerAvailable] = useState(true) // Nouvel état pour vérifier la disponibilité du serveur
   
-  const { login, isLoading, error, clearErrors, isAuthenticated, user } = useAuthStore()
+  const { login, isLoading, error, clearErrors, isAuthenticated, user, serverAvailable } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   
   // Récupérer l'URL de redirection s'il y en a une
   const from = location.state?.from?.pathname || '/'
+  
+  // Vérifier si le serveur est accessible
+  useEffect(() => {
+    const verifyServerConnection = async () => {
+      const status = await checkServerStatus();
+      setIsServerAvailable(status);
+      if (!status) {
+        toast.error('Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.');
+      }
+    };
+    
+    verifyServerConnection();
+  }, []);
+  
+  // Synchroniser l'état local avec l'état global
+  useEffect(() => {
+    setIsServerAvailable(serverAvailable);
+  }, [serverAvailable]);
   
   // Utiliser l'email s'il est passé dans l'état de la navigation
   useEffect(() => {
@@ -62,6 +83,12 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    // Vérifier d'abord si le serveur est disponible
+    if (!isServerAvailable) {
+      toast.error('Le serveur est inaccessible. Veuillez vérifier votre connexion et si le serveur backend est démarré.');
+      return;
+    }
+    
     // Debug - afficher les données de connexion (sans le mot de passe)
     console.log('Soumission du formulaire de connexion:', {
       email: formData.email,
@@ -71,6 +98,20 @@ const Login = () => {
     const success = await login(formData)
     if (success) {
       // La redirection se fera automatiquement via l'effet useEffect
+    }
+  }
+  
+  // Fonction pour tenter de reconnecter au serveur
+  const handleRetryConnection = async () => {
+    toast.loading('Tentative de connexion au serveur...');
+    const status = await checkServerStatus();
+    setIsServerAvailable(status);
+    toast.dismiss();
+    
+    if (status) {
+      toast.success('Connexion au serveur rétablie!');
+    } else {
+      toast.error('Le serveur est toujours inaccessible. Veuillez vérifier qu\'il est bien démarré.');
     }
   }
 
@@ -98,6 +139,32 @@ const Login = () => {
       >
         Connexion
       </motion.h2>
+      
+      {/* Message d'erreur sur la disponibilité du serveur */}
+      {!isServerAvailable && (
+        <motion.div 
+          className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-start">
+            <svg className="h-5 w-5 text-red-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <strong className="font-bold">Problème de connexion!</strong>
+              <p className="mt-1">Impossible de se connecter au serveur. Veuillez vérifier que le serveur backend est démarré et accessible.</p>
+              <button 
+                onClick={handleRetryConnection}
+                className="mt-2 bg-red-200 hover:bg-red-300 text-red-800 font-medium py-1 px-3 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Réessayer la connexion
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
       
       {/* Message pour l'utilisateur redirigé depuis la page d'inscription */}
       {emailFromRegister && (
@@ -164,7 +231,7 @@ const Login = () => {
               required
               className="w-full py-3 pl-10 pr-4 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors"
               placeholder="exemple@domaine.com"
-              disabled={isLoading}
+              disabled={isLoading || !isServerAvailable}
               autoFocus={emailFromRegister} // Mettre le focus sur le champ de mot de passe si l'email est pré-rempli
             />
           </div>
@@ -197,13 +264,14 @@ const Login = () => {
               required
               className="w-full py-3 pl-10 pr-10 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors"
               placeholder="••••••••"
-              disabled={isLoading}
+              disabled={isLoading || !isServerAvailable}
               autoFocus={!emailFromRegister} // Mettre le focus sur le champ de mot de passe si l'email est pré-rempli
             />
             <button
               type="button"
               className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none"
               onClick={() => setShowPassword(!showPassword)}
+              disabled={isLoading || !isServerAvailable}
             >
               {showPassword ? (
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -222,7 +290,7 @@ const Login = () => {
         <button
           type="submit"
           className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
-          disabled={isLoading}
+          disabled={isLoading || !isServerAvailable}
         >
           {isLoading ? (
             <div className="flex items-center justify-center">
@@ -231,6 +299,13 @@ const Login = () => {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
               Connexion en cours...
+            </div>
+          ) : !isServerAvailable ? (
+            <div className="flex items-center justify-center">
+              <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Serveur inaccessible
             </div>
           ) : (
             <div className="flex items-center justify-center">
@@ -258,7 +333,14 @@ const Login = () => {
         <div className="mt-6 grid grid-cols-2 gap-3">
           <a
             href="#"
-            className="w-full inline-flex items-center justify-center py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            className="w-full inline-flex items-center justify-center py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+            onClick={(e) => {
+              e.preventDefault();
+              if (!isServerAvailable) {
+                toast.error('Le serveur est inaccessible. Impossible d\'utiliser l\'authentification Google.');
+              }
+            }}
+            disabled={!isServerAvailable}
           >
             <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
               <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
@@ -272,7 +354,14 @@ const Login = () => {
           </a>
           <a
             href="#"
-            className="w-full inline-flex items-center justify-center py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            className="w-full inline-flex items-center justify-center py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+            onClick={(e) => {
+              e.preventDefault();
+              if (!isServerAvailable) {
+                toast.error('Le serveur est inaccessible. Impossible d\'utiliser l\'authentification GitHub.');
+              }
+            }}
+            disabled={!isServerAvailable}
           >
             <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
               <path fillRule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clipRule="evenodd" />

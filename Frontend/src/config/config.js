@@ -1,4 +1,4 @@
-// src/config/config.js - Modifications pour correspondre à votre structure
+// src/config/config.js
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export const TOAST_DURATION = 5000; // 5 secondes
@@ -33,7 +33,7 @@ export const ROUTES = {
 
 // Messages d'erreur communs
 export const ERROR_MESSAGES = {
-  NETWORK_ERROR: 'Impossible de se connecter au serveur. Veuillez vérifier votre connexion Internet.',
+  NETWORK_ERROR: 'Impossible de se connecter au serveur. Veuillez vérifier votre connexion Internet et si le serveur backend est démarré.',
   UNAUTHORIZED: 'Vous n\'êtes pas autorisé à accéder à cette ressource.',
   SERVER_ERROR: 'Une erreur serveur s\'est produite. Veuillez réessayer ultérieurement.',
   VALIDATION_ERROR: 'Les données fournies sont invalides. Veuillez vérifier vos entrées.'
