@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import axios from '../../config/axiosConfig';
 import { ROUTES } from '../../config/config';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '../../store/authStore';
 
 const VerifyEmail = () => {
   const [verificationStatus, setVerificationStatus] = useState({
@@ -15,6 +16,7 @@ const VerifyEmail = () => {
 
   const { token } = useParams();
   const navigate = useNavigate();
+  const { checkAuth } = useAuthStore();
 
   useEffect(() => {
     const verifyEmailToken = async () => {
@@ -40,6 +42,9 @@ const VerifyEmail = () => {
 
         toast.success('Votre adresse email a été vérifiée avec succès!');
 
+        // Mettre à jour les informations de l'utilisateur
+        await checkAuth();
+
         // Rediriger vers la page de connexion après 5 secondes
         setTimeout(() => {
           navigate(ROUTES.LOGIN);
@@ -58,10 +63,10 @@ const VerifyEmail = () => {
     };
 
     verifyEmailToken();
-  }, [token, navigate]);
+  }, [token, navigate, checkAuth]);
 
   return (
-    <div className="text-center">
+    <div className="text-center max-w-lg mx-auto">
       <motion.h2
         className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4"
         initial={{ opacity: 0, y: -20 }}

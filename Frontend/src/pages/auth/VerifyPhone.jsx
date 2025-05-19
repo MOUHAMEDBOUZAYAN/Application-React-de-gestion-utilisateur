@@ -1,5 +1,5 @@
 // src/pages/auth/VerifyPhone.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../../store/authStore';
@@ -12,9 +12,27 @@ const VerifyPhone = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState(null);
+  const [countdown, setCountdown] = useState(0);
   
-  const { user } = useAuthStore();
+  const { user, checkAuth } = useAuthStore();
   const navigate = useNavigate();
+
+  // Effet pour vérifier si l'utilisateur a un numéro de téléphone défini
+  useEffect(() => {
+    if (user && !user.phone) {
+      toast.error('Vous n\'avez pas de numéro de téléphone défini dans votre profil');
+      navigate('/profile');
+    }
+  }, [user, navigate]);
+
+  // Gérer le compte à rebours pour le renvoi de code
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   // Masquer partiellement le numéro de téléphone
   const maskPhone = (phone) => {
@@ -43,10 +61,17 @@ const VerifyPhone = () => {
     setError(null);
 
     try {
-      await authService.verifyPhone(verificationCode);
+      const response = await authService.verifyPhone(verificationCode);
       toast.success('Numéro de téléphone vérifié avec succès!');
-      navigate(ROUTES.PROFILE);
+      
+      // Mettre à jour les données utilisateur
+      await checkAuth();
+      
+      setTimeout(() => {
+        navigate(ROUTES.PROFILE);
+      }, 2000);
     } catch (error) {
+      console.error('Erreur lors de la vérification du téléphone:', error);
       setError(error.response?.data?.error || 'Échec de la vérification. Veuillez réessayer.');
     } finally {
       setIsSubmitting(false);
@@ -55,13 +80,17 @@ const VerifyPhone = () => {
 
   // Renvoyer le code de vérification
   const handleResendCode = async () => {
+    if (countdown > 0) return;
+    
     setIsResending(true);
     setError(null);
 
     try {
       await authService.resendVerificationSMS();
       toast.success('Un nouveau code de vérification a été envoyé à votre téléphone.');
+      setCountdown(60); // Bloquer le renvoi pendant 60 secondes
     } catch (error) {
+      console.error('Erreur lors du renvoi du SMS:', error);
       setError(error.response?.data?.error || 'Échec de l\'envoi du code. Veuillez réessayer.');
     } finally {
       setIsResending(false);
@@ -69,7 +98,7 @@ const VerifyPhone = () => {
   };
 
   return (
-    <div>
+    <div className="max-w-lg mx-auto">
       <motion.h2
         className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4"
         initial={{ opacity: 0, y: -20 }}
@@ -156,12 +185,23 @@ const VerifyPhone = () => {
           Vous n'avez pas reçu de code?{' '}
           <button
             onClick={handleResendCode}
-            disabled={isResending}
+            disabled={isResending || countdown > 0}
             className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium focus:outline-none disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {isResending ? 'Envoi en cours...' : 'Renvoyer le code'}
+            {isResending ? 'Envoi en cours...' : 
+             countdown > 0 ? `Renvoi possible dans ${countdown}s` :
+             'Renvoyer le code'}
           </button>
         </p>
+      </div>
+
+      <div className="mt-4 text-center">
+        <button
+          onClick={() => navigate('/profile')}
+          className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm font-medium"
+        >
+          Retour au profil
+        </button>
       </div>
     </div>
   );

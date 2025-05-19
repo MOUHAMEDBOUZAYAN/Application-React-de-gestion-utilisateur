@@ -99,9 +99,14 @@ const Register = () => {
     try {
       console.log('Envoi des données:', { ...registerData, password: '[MASQUÉ]', passwordConfirm: '[MASQUÉ]' })
       
-      const success = await register(registerData)
-      if (success) {
+      const result = await register(registerData)
+      
+      // Vérifier si on doit rediriger vers la page de vérification en attente
+      if (result && result.redirectToVerificationPending) {
+        navigate('/verification-pending')
+      } else if (result === true) {
         // La redirection se fera automatiquement via l'effet useEffect
+        console.log('Inscription réussie, redirection automatique en cours...')
       }
     } catch (err) {
       // Gérer l'erreur ici si nécessaire

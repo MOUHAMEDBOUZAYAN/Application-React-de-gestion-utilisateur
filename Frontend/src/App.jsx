@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
+import { Toaster } from 'react-hot-toast'
 
 // Layouts
 import MainLayout from './layouts/MainLayout'
@@ -15,6 +16,7 @@ import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import VerifyEmail from './pages/auth/VerifyEmail'
 import VerifyPhone from './pages/auth/VerifyPhone'
+import VerificationPending from './pages/auth/VerificationPending'
 import Profile from './pages/profile/Profile'
 import NotFound from './pages/NotFound'
 
@@ -51,103 +53,105 @@ function App() {
   }
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        {/* Routes publiques avec MainLayout */}
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/404" element={<NotFound />} />
-        </Route>
+    <>
+      <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+      
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          {/* Routes publiques avec MainLayout */}
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/404" element={<NotFound />} />
+          </Route>
 
-        {/* Routes d'authentification avec AuthLayout */}
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
-          <Route path="/verify-email/:token" element={<VerifyEmail />} />
-        </Route>
+          {/* Routes d'authentification avec AuthLayout */}
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
+            <Route path="/verify-email/:token" element={<VerifyEmail />} />
+            <Route path="/verification-pending" element={<VerificationPending />} />
+          </Route>
 
-        {/* Route de vérification du téléphone (nécessite authentification) */}
-        <Route element={<DashboardLayout />}>
-          <Route 
-            path="/verify-phone" 
-            element={
-              <ProtectedRoute>
-                <VerifyPhone />
-              </ProtectedRoute>
-            }
-          />
-        </Route>
+          {/* Routes protégées dans le DashboardLayout */}
+          <Route element={<DashboardLayout />}>
+            {/* Route de vérification du téléphone (nécessite authentification) */}
+            <Route 
+              path="/verify-phone" 
+              element={
+                <ProtectedRoute>
+                  <VerifyPhone />
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* Routes protégées utilisateur */}
+            <Route 
+              path="/user/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <UserDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              } 
+            />
 
-        {/* Routes protégées utilisateur */}
-        <Route element={<DashboardLayout />}>
-          <Route 
-            path="/user/dashboard" 
-            element={
-              <ProtectedRoute>
-                <UserDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route 
-            path="/profile" 
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            } 
-          />
-        </Route>
+            {/* Routes protégées administrateur */}
+            <Route 
+              path="/admin/dashboard" 
+              element={
+                <ProtectedRoute adminOnly={true}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route 
+              path="/admin/users" 
+              element={
+                <ProtectedRoute adminOnly={true}>
+                  <LogManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route 
+              path="/admin/users/add" 
+              element={
+                <ProtectedRoute adminOnly={true}>
+                  <AddUser />
+                </ProtectedRoute>
+              }
+            />
+            <Route 
+              path="/admin/logs" 
+              element={
+                <ProtectedRoute adminOnly={true}>
+                  <LogManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route 
+              path="/admin/settings" 
+              element={
+                <ProtectedRoute adminOnly={true}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
 
-        {/* Routes protégées administrateur */}
-        <Route element={<DashboardLayout />}>
-          <Route 
-            path="/admin/dashboard" 
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route 
-            path="/admin/users" 
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <LogManagement />
-              </ProtectedRoute>
-            }
-          />
-          <Route 
-            path="/admin/users/add" 
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <AddUser />
-              </ProtectedRoute>
-            }
-          />
-          <Route 
-            path="/admin/logs" 
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <LogManagement />
-              </ProtectedRoute>
-            }
-          />
-          <Route 
-            path="/admin/settings" 
-            element={
-              <ProtectedRoute adminOnly={true}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-        </Route>
-
-        {/* Route pour les chemins non définis */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </AnimatePresence>
+          {/* Route pour les chemins non définis */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AnimatePresence>
+    </>
   )
 }
 

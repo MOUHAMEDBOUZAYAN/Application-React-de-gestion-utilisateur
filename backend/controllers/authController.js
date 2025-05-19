@@ -77,6 +77,77 @@ exports.register = asyncHandler(async (req, res, next) => {
       `
     });
 
+
+    // controllers/authController.js
+
+// Ajouter cette nouvelle méthode pour le renvoi d'email sans authentification
+exports.resendPublicVerificationEmail = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'L\'adresse email est requise'
+      });
+    }
+    
+    // Rechercher l'utilisateur par email
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'Aucun utilisateur trouvé avec cette adresse email'
+      });
+    }
+    
+    // Si l'email est déjà vérifié
+    if (user.isEmailVerified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cet email est déjà vérifié'
+      });
+    }
+    
+    // Générer un nouveau token de vérification
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+    
+    // Mettre à jour l'utilisateur avec le nouveau token
+    user.emailVerificationToken = verificationToken;
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 heures
+    await user.save();
+    
+    // Envoyer l'email de vérification
+    // Créer l'URL de vérification
+    const verificationUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${verificationToken}`;
+    
+    // Message de l'email
+    const message = `
+      <h1>Vérification de votre adresse e-mail</h1>
+      <p>Veuillez cliquer sur le lien suivant pour vérifier votre adresse e-mail :</p>
+      <a href="${verificationUrl}" clicktracking=off>${verificationUrl}</a>
+    `;
+    
+    await sendEmail({
+      email: user.email,
+      subject: 'Vérification de votre adresse e-mail',
+      message
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Email de vérification envoyé'
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de l\'envoi de l\'email de vérification'
+    });
+  }
+};
+
     // Vérifier si l'email a été simulé (développement)
     const isSimulated = emailResult && emailResult.simulated;
     if (isSimulated && process.env.NODE_ENV === 'development') {
@@ -638,6 +709,8 @@ exports.verifyPhone = asyncHandler(async (req, res, next) => {
     }
   });
 });
+
+
 
 // @desc    Renvoyer l'email de vérification
 // @route   POST /api/auth/resendverificationemail

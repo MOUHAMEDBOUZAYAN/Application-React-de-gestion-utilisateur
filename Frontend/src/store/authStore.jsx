@@ -100,28 +100,40 @@ export const useAuthStore = create((set, get) => ({
       
       const response = await axios.post('/auth/register', userData);
       
-      const { token, user } = response.data;
-      
-      // Stocker le token
-      if (token) {
-        localStorage.setItem('token', token);
+      // Vérifier si un token est fourni (connexion automatique)
+      if (response.data.token) {
+        // Stocker le token
+        localStorage.setItem('token', response.data.token);
         
         // Mettre à jour le state avec l'utilisateur
         set({ 
-          token, 
-          user,
+          token: response.data.token, 
+          user: response.data.user,
           isAuthenticated: true, 
           isLoading: false,
           error: null 
         });
         
         toast.success('Inscription réussie! Bienvenue!');
+        
+        // Si l'email n'est pas vérifié, rediriger vers la page de profil/sécurité
+        if (!response.data.user.isEmailVerified) {
+          // Stocker l'information qu'une vérification est nécessaire
+          localStorage.setItem('needsVerification', 'email');
+          return true;
+        }
+        
         return true;
       } else {
-        // Si pas de token mais succès, c'est qu'une vérification est requise
-        toast.success(response.data.message || 'Inscription réussie! Veuillez vérifier votre email.');
+        // Pas de token automatique, une vérification est requise
         set({ isLoading: false });
-        return true;
+        toast.success(response.data.message || 'Inscription réussie! Veuillez vérifier votre email.');
+        
+        // Conserver l'email pour future connexion
+        localStorage.setItem('pendingEmail', userData.email);
+        
+        // Retourner un objet avec une propriété redirectToVerificationPending
+        return { redirectToVerificationPending: true };
       }
     } catch (error) {
       console.error('Erreur lors de l\'inscription:', error);

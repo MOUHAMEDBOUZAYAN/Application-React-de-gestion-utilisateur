@@ -159,10 +159,31 @@ export const authService = {
     }
   },
 
-  // Renvoyer l'email de vérification
-  resendVerificationEmail: async () => {
+  // Renvoyer l'email de vérification - MODIFIÉ pour gérer le cas sans authentification
+  resendVerificationEmail: async (email) => {
     try {
-      const response = await axios.post('/auth/resendverificationemail');
+      // La route doit être adaptée à votre backend - soit elle accepte un email, soit elle utilise le token
+      let response;
+      // Récupérer le token temporaire s'il existe
+      const tempToken = localStorage.getItem('temp_token');
+      
+      if (tempToken) {
+        // Si nous avons un token, essayer d'abord avec le token
+        try {
+          response = await axios.post('/auth/resendverificationemail', {}, {
+            headers: {
+              Authorization: `Bearer ${tempToken}`
+            }
+          });
+        } catch (tokenError) {
+          // Si ça échoue avec le token, essayer avec l'email
+          response = await axios.post('/auth/public/resendverification', { email });
+        }
+      } else {
+        // Si nous n'avons pas de token, utiliser directement l'email
+        response = await axios.post('/auth/public/resendverification', { email });
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);

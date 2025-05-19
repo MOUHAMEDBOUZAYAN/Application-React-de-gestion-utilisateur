@@ -1,11 +1,13 @@
-// src/pages/profile/components/AccountSecurity.jsx
+// src/components/profile/AccountSecurity.jsx
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { authService } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import toast from 'react-hot-toast';
 
 const AccountSecurity = () => {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [accountStatus, setAccountStatus] = useState({
     isEmailVerified: false,
@@ -21,7 +23,7 @@ const AccountSecurity = () => {
   useEffect(() => {
     const fetchAccountStatus = async () => {
       try {
-        // Utiliser les données de l'utilisateur connecté plutôt que d'appeler /auth/status
+        // Utiliser les données de l'utilisateur connecté
         if (user) {
           setAccountStatus({
             isEmailVerified: user.isEmailVerified || false,
@@ -56,13 +58,16 @@ const AccountSecurity = () => {
     }
   };
 
-  // Renvoyer le SMS de vérification
+  // Renvoyer le SMS de vérification et rediriger vers la page de vérification
   const handleResendVerificationSMS = async () => {
     setIsSendingSMSVerification(true);
     try {
       const response = await authService.resendVerificationSMS();
       toast.success('Un SMS de vérification a été envoyé à votre numéro de téléphone');
       console.log('Réponse du renvoi du SMS de vérification:', response);
+      
+      // Rediriger vers la page de vérification de téléphone
+      navigate('/verify-phone');
     } catch (error) {
       console.error('Erreur lors du renvoi du SMS de vérification:', error);
       toast.error('Erreur lors de l\'envoi du SMS de vérification');
@@ -150,8 +155,7 @@ const AccountSecurity = () => {
                   <span className="font-medium">Email non vérifié</span>
                 </div>
                 <p>
-                  Veuillez vérifier votre adresse e-mail pour activer toutes les fonctionnalités de votre compte.
-                  Vous devriez avoir reçu un e-mail de vérification. Si vous ne l'avez pas reçu, cliquez sur "Vérifier" pour en recevoir un nouveau.
+                  Veuillez vérifier votre adresse e-mail pour activer toutes les fonctionnalités de votre compte.Vous devriez avoir reçu un e-mail de vérification. Si vous ne l'avez pas reçu, cliquez sur "Vérifier" pour en recevoir un nouveau.
                 </p>
               </div>
             )}
@@ -177,7 +181,7 @@ const AccountSecurity = () => {
                     )}
                   </div>
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    {accountStatus.phone ? maskPhone(accountStatus.phone) : ''}
+                    {maskPhone(accountStatus.phone)}
                   </p>
                 </div>
                 {!accountStatus.isPhoneVerified && (
