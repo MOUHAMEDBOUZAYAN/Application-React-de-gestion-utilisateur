@@ -704,4 +704,70 @@ const sendTokenResponse = (user, statusCode, res) => {
     });
 };
 
+/**
+ * @desc    Renvoyer l'email de vérification (version publique)
+ * @route   POST /api/auth/public/resendverification
+ * @access  Public
+ */
+exports.resendPublicVerificationEmail = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new ErrorResponse('Veuillez fournir une adresse email', 400));
+  }
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return next(new ErrorResponse('Aucun utilisateur trouvé avec cette adresse email', 404));
+  }
+
+  if (user.isEmailVerified) {
+    return next(new ErrorResponse('Cet email est déjà vérifié', 400));
+  }
+
+  // Générer un nouveau token de vérification
+  const verificationToken = user.createEmailVerificationToken();
+  await user.save({ validateBeforeSave: false });
+
+  // URL de vérification
+  const verificationURL = `${req.protocol}://${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+
+  const message = `
+    Veuillez cliquer sur le lien suivant pour vérifier votre adresse email: 
+    ${verificationURL}
+  `;
+
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: 'Vérification de votre adresse email',
+      message
+    });
+
+    // Journaliser l'action
+    await UserLog.create({
+      user: user._id,
+      action: 'resend_verification_email',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      description: 'Renvoyé l\'email de vérification (version publique)'
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Email de vérification envoyé'
+    });
+  } catch (err) {
+    console.error('Erreur lors de l\'envoi de l\'email de vérification:', err);
+
+    // Réinitialiser le token en cas d'erreur
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse('Erreur lors de l\'envoi de l\'email de vérification. Veuillez réessayer.', 500));
+  }
+});
+
 module.exports = exports;
