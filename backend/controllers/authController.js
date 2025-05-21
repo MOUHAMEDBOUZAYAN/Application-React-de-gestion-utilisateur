@@ -31,16 +31,26 @@ exports.register = asyncHandler(async (req, res, next) => {
   // URL de vérification
   const verificationURL = `${req.protocol}://${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
   
-  const message = `
-    Bienvenue sur notre plateforme! Veuillez cliquer sur le lien suivant pour vérifier votre adresse email: 
-    ${verificationURL}
+  const message = `Bienvenue sur notre plateforme! Veuillez cliquer sur le lien suivant pour vérifier votre adresse email: ${verificationURL}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; border:1px solid #eee; border-radius:8px; padding:32px;">
+      <h2 style="color:#222; text-align:center;">Bienvenue sur notre plateforme!</h2>
+      <p>Pour finaliser votre inscription, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous :</p>
+      <div style="text-align:center; margin:32px 0;">
+        <a href="${verificationURL}" style="background:#22c55e; color:#fff; padding:12px 32px; border-radius:6px; text-decoration:none; font-size:18px; display:inline-block;">
+          Vérifier mon email
+        </a>
+      </div>
+      <p style="color:#555; font-size:14px;">Ce lien expirera dans 24 heures.</p>
+    </div>
   `;
   
   try {
     await sendEmail({
       email: user.email,
       subject: 'Vérification de votre adresse email',
-      message
+      message,
+      html
     });
     
     // Journaliser l'action
@@ -209,6 +219,11 @@ exports.updateDetails = asyncHandler(async (req, res, next) => {
     address: req.body.address
   };
   
+  // Empêcher la modification du rôle
+  if ('role' in req.body) {
+    return next(new ErrorResponse('Modification du rôle interdite', 403));
+  }
+  
   // Supprimer les champs non fournis
   Object.keys(fieldsToUpdate).forEach(key => {
     if (fieldsToUpdate[key] === undefined) {
@@ -216,8 +231,11 @@ exports.updateDetails = asyncHandler(async (req, res, next) => {
     }
   });
   
-  // Si l'email est modifié, réinitialiser la vérification
+  // Si l'email est modifié et déjà vérifié, refuser
   const user = await User.findById(req.user.id);
+  if (fieldsToUpdate.email && user.isEmailVerified) {
+    return next(new ErrorResponse('Impossible de modifier un email déjà vérifié', 403));
+  }
   
   if (fieldsToUpdate.email && fieldsToUpdate.email !== user.email) {
     fieldsToUpdate.isEmailVerified = false;
@@ -465,16 +483,26 @@ exports.resendVerificationEmail = asyncHandler(async (req, res, next) => {
   // URL de vérification
   const verificationURL = `${req.protocol}://${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
   
-  const message = `
-    Veuillez cliquer sur le lien suivant pour vérifier votre adresse email:
-    ${verificationURL}
+  const message = `Veuillez cliquer sur le lien suivant pour vérifier votre adresse email: ${verificationURL}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; border:1px solid #eee; border-radius:8px; padding:32px;">
+      <h2 style="color:#222; text-align:center;">Bienvenue sur notre plateforme!</h2>
+      <p>Pour finaliser votre inscription, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous :</p>
+      <div style="text-align:center; margin:32px 0;">
+        <a href="${verificationURL}" style="background:#22c55e; color:#fff; padding:12px 32px; border-radius:6px; text-decoration:none; font-size:18px; display:inline-block;">
+          Vérifier mon email
+        </a>
+      </div>
+      <p style="color:#555; font-size:14px;">Ce lien expirera dans 24 heures.</p>
+    </div>
   `;
   
   try {
     await sendEmail({
       email: user.email,
       subject: 'Vérification de votre adresse email',
-      message
+      message,
+      html
     });
     
     // Journaliser l'action
@@ -733,16 +761,26 @@ exports.resendPublicVerificationEmail = asyncHandler(async (req, res, next) => {
   // URL de vérification
   const verificationURL = `${req.protocol}://${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
 
-  const message = `
-    Veuillez cliquer sur le lien suivant pour vérifier votre adresse email: 
-    ${verificationURL}
+  const message = `Veuillez cliquer sur le lien suivant pour vérifier votre adresse email: ${verificationURL}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; border:1px solid #eee; border-radius:8px; padding:32px;">
+      <h2 style="color:#222; text-align:center;">Bienvenue sur notre plateforme!</h2>
+      <p>Pour finaliser votre inscription, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous :</p>
+      <div style="text-align:center; margin:32px 0;">
+        <a href="${verificationURL}" style="background:#22c55e; color:#fff; padding:12px 32px; border-radius:6px; text-decoration:none; font-size:18px; display:inline-block;">
+          Vérifier mon email
+        </a>
+      </div>
+      <p style="color:#555; font-size:14px;">Ce lien expirera dans 24 heures.</p>
+    </div>
   `;
 
   try {
     await sendEmail({
       email: user.email,
       subject: 'Vérification de votre adresse email',
-      message
+      message,
+      html
     });
 
     // Journaliser l'action

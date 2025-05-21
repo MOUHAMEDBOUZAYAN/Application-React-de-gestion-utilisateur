@@ -19,6 +19,8 @@ import VerifyPhone from './pages/auth/VerifyPhone'
 import VerificationPending from './pages/auth/VerificationPending'
 import Profile from './pages/profile/Profile'
 import NotFound from './pages/NotFound'
+import VerifyPage from './pages/VerifyPage'
+import Hello from './components/Hello';
 
 // Dashboard Pages
 import UserDashboard from './pages/dashboard/UserDashboard'
@@ -62,6 +64,7 @@ function App() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<Home />} />
             <Route path="/404" element={<NotFound />} />
+            <Route path="/verify" element={<VerifyPage />} />
           </Route>
 
           {/* Routes d'authentification avec AuthLayout */}
@@ -103,6 +106,7 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+             
 
             {/* Routes protégées administrateur */}
             <Route 

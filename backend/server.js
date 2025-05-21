@@ -108,6 +108,15 @@ app.get('/', (req, res) => {
   });
 });
 
+// Ajout de la route /health à la racine
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Le serveur fonctionne correctement',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Middleware de gestion des erreurs
 app.use(errorHandler);
 

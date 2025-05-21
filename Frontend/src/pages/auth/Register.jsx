@@ -122,12 +122,17 @@ const Register = () => {
       
       const result = await register(registerData)
       
-      // Vérifier si on doit rediriger vers la page de vérification en attente
+      // Redirection après inscription
       if (result && result.redirectToVerificationPending) {
-        navigate('/verification-pending')
+        navigate('/verify')
+      } else if (result === true && user && (!user.isEmailVerified && !user.isPhoneVerified)) {
+        navigate('/verify')
       } else if (result === true) {
-        // La redirection se fera automatiquement via l'effet useEffect
-        console.log('Inscription réussie, redirection automatique en cours...')
+        if (user && user.role === 'admin') {
+          navigate('/admin/dashboard')
+        } else {
+          navigate('/user/dashboard')
+        }
       }
     } catch (err) {
       // Gérer l'erreur ici si nécessaire

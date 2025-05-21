@@ -24,6 +24,13 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
+  
+
+  // Rediriger vers /verify si l'utilisateur n'est pas vérifié
+  if (user && !user.isEmailVerified && !user.isPhoneVerified) {
+    return <Navigate to="/verify" replace />;
+  }
+
   // Si la route est réservée aux administrateurs et que l'utilisateur n'est pas admin
   if (adminOnly && user?.role !== 'admin') {
     return <Navigate to="/" replace />

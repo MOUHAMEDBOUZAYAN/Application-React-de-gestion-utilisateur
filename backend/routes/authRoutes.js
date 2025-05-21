@@ -1,6 +1,9 @@
 // routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
+const { body } = require('express-validator');
+const validate = require('../middlewares/validate');
+const ensureVerified = require('../middlewares/ensureVerified');
 
 // Import des middlewares d'authentification
 const { protect, authorize } = require('../middlewares/jwtAuth');
@@ -25,8 +28,25 @@ const {
 } = require('../controllers/authController');
 
 // Routes publiques
-router.post('/register', register);
-router.post('/login', login);
+router.post(
+  '/register',
+  [
+    body('email').isEmail().withMessage('Email invalide'),
+    body('password').isLength({ min: 6 }).withMessage('Mot de passe trop court'),
+    body('name').notEmpty().withMessage('Le nom est requis')
+  ],
+  validate,
+  register
+);
+router.post(
+  '/login',
+  [
+    body('email').isEmail().withMessage('Email invalide'),
+    body('password').notEmpty().withMessage('Mot de passe requis')
+  ],
+  validate,
+  login
+);
 router.get('/logout', logout);
 router.post('/forgotpassword', forgotPassword);
 router.put('/resetpassword/:resettoken', resetPassword);
@@ -48,8 +68,8 @@ router.post('/check-email', checkEmailAvailability);
 // Routes protégées
 router.use(protect); // Middleware pour protéger toutes les routes suivantes
 router.get('/me', getMe);
-router.put('/updatedetails', updateDetails);
-router.put('/updatepassword', updatePassword);
+router.put('/updatedetails', ensureVerified, updateDetails);
+router.put('/updatepassword', ensureVerified, updatePassword);
 
 // Route de vérification de santé du serveur
 router.get('/health', healthCheck);

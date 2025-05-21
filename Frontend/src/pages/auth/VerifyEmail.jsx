@@ -16,7 +16,7 @@ const VerifyEmail = () => {
 
   const { token } = useParams();
   const navigate = useNavigate();
-  const { checkAuth } = useAuthStore();
+  const { checkAuth, user } = useAuthStore();
 
   useEffect(() => {
     const verifyEmailToken = async () => {
@@ -40,15 +40,22 @@ const VerifyEmail = () => {
           error: null
         });
 
-        toast.success('Votre adresse email a été vérifiée avec succès!');
+        toast.success('Votre adresse email a été vérifiée avec succès !');
 
         // Mettre à jour les informations de l'utilisateur
         await checkAuth();
-
-        // Rediriger vers la page de connexion après 5 secondes
+        // Rediriger selon le statut de vérification
         setTimeout(() => {
-          navigate(ROUTES.LOGIN);
-        }, 5000);
+          if (user && (user.isEmailVerified || user.isPhoneVerified)) {
+            if (user.role === 'admin') {
+              navigate('/admin/dashboard');
+            } else {
+              navigate('/user/dashboard');
+            }
+          } else {
+            navigate('/verify');
+          }
+        }, 3000);
       } catch (error) {
         console.error("Erreur lors de la vérification de l'email:", error);
         
@@ -63,7 +70,7 @@ const VerifyEmail = () => {
     };
 
     verifyEmailToken();
-  }, [token, navigate, checkAuth]);
+  }, [token, navigate, checkAuth, user]);
 
   return (
     <div className="text-center max-w-lg mx-auto">
@@ -96,18 +103,29 @@ const VerifyEmail = () => {
           <svg className="h-16 w-16 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h3 className="text-xl font-medium text-green-800 dark:text-green-300 mb-2">
-            Email vérifié avec succès!
+          <h3 className="text-2xl font-bold text-green-800 dark:text-green-300 mb-2">
+            Email vérifié avec succès !
           </h3>
           <p className="text-green-700 dark:text-green-400 mb-4">
-            Votre adresse email a été vérifiée avec succès. Vous allez être redirigé vers la page de connexion dans quelques secondes.
+            Votre adresse email a été vérifiée. Vous allez être redirigé vers votre espace dans quelques secondes.<br />
+            Si la redirection ne fonctionne pas, cliquez sur le bouton ci-dessous.
           </p>
-          <Link
-            to={ROUTES.LOGIN}
-            className="inline-block bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+          <button
+            className="inline-block bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+            onClick={() => {
+              if (user && (user.isEmailVerified || user.isPhoneVerified)) {
+                if (user.role === 'admin') {
+                  navigate('/admin/dashboard');
+                } else {
+                  navigate('/user/dashboard');
+                }
+              } else {
+                navigate('/verify');
+              }
+            }}
           >
-            Se connecter maintenant
-          </Link>
+            Accéder à mon espace
+          </button>
         </motion.div>
       ) : (
         <motion.div

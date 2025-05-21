@@ -53,22 +53,16 @@ const Login = () => {
   // Rediriger si déjà authentifié
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Debug le rôle de l'utilisateur
-      console.log('Redirection après connexion - Données utilisateur:', {
-        isAuthenticated,
-        userRole: user.role
-      })
-      
-      // Rediriger vers le dashboard approprié en fonction du rôle
-      if (user.role === 'admin') {
-        console.log('Redirection vers le dashboard admin')
-        navigate('/admin/dashboard')
+      if (!user.isEmailVerified && !user.isPhoneVerified) {
+        toast('Veuillez vérifier votre email ou numéro de téléphone pour accéder à votre espace.', { icon: 'ℹ️' });
+        navigate('/verify');
+      } else if (user.role === 'admin') {
+        navigate('/admin/dashboard');
       } else {
-        console.log('Redirection vers le dashboard utilisateur')
-        navigate('/user/dashboard')
+        navigate('/user/dashboard');
       }
     }
-  }, [isAuthenticated, user, navigate])
+  }, [isAuthenticated, user, navigate]);
   
   // Nettoyer les erreurs lors du montage du composant
   useEffect(() => {
